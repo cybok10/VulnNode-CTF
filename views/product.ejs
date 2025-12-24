@@ -1,0 +1,65 @@
+<%- include('layout', { body: '' }) %>
+
+<div class="row">
+    <div class="col-lg-6">
+        <img class="img-fluid rounded mb-4" src="/uploads/<%= product.image || 'default.jpg' %>" alt="" onerror="this.src='https://via.placeholder.com/700x400'">
+    </div>
+    <div class="col-lg-6">
+        <h2><%= product.name %></h2>
+        <p><%= product.description %></p>
+        <h3 class="text-success">$<%= product.price %></h3>
+        
+        <hr>
+        
+        <!-- EVAL INJECTION VULNERABILITY -->
+        <div class="card bg-light mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Apply Discount Code</h5>
+                <form action="/product/apply-discount" method="POST" target="_blank">
+                    <div class="input-group">
+                        <input type="text" name="code" class="form-control" placeholder="Enter JS... I mean code">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="submit">Apply</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+<!-- REVIEWS SECTION -->
+<div class="row">
+    <div class="col-md-8">
+        <h3>Community Reviews</h3>
+        
+        <!-- STORED XSS VULNERABILITY -->
+        <!-- We loop through feedback and render comment with <%- %> -->
+        <% feedbacks.forEach(function(feedback) { %>
+            <div class="media mb-4">
+                <img class="d-flex mr-3 rounded-circle" src="https://via.placeholder.com/50" alt="">
+                <div class="media-body">
+                    <h5 class="mt-0">User #<%= feedback.user_id %></h5>
+                    <div class="border p-2 bg-white">
+                        <%- feedback.comment %> 
+                    </div>
+                </div>
+            </div>
+        <% }); %>
+
+        <!-- Add Review Form -->
+        <div class="card my-4">
+            <h5 class="card-header">Leave a Review</h5>
+            <div class="card-body">
+                <form action="/product/feedback" method="POST">
+                    <div class="form-group">
+                        <textarea class="form-control" name="comment" rows="3" placeholder="HTML tags allowed..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

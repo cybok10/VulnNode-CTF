@@ -1,0 +1,44 @@
+<%- include('layout', { body: '' }) %>
+
+<div class="jumbotron my-4">
+    <h1 class="display-3">Welcome to VulnNode Shop!</h1>
+    <p class="lead">The most insecure e-commerce platform on the web.</p>
+    
+    <!-- SEARCH FORM: Target for SQL Injection -->
+    <form action="/search" method="GET" class="form-inline my-2 my-lg-0">
+        <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search products..." aria-label="Search">
+        <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Search</button>
+    </form>
+</div>
+
+<!-- VULNERABILITY: REFLECTED XSS -->
+<!-- If searchTerm exists, we print it raw using <%- %> instead of escaped <%= %> -->
+<% if (typeof searchTerm !== 'undefined' && searchTerm) { %>
+    <div class="alert alert-info">
+        <h4>Search Results for: <%- searchTerm %></h4>
+    </div>
+<% } %>
+
+<div class="row text-center">
+    <% if (products.length > 0) { %>
+        <% products.forEach(function(product) { %>
+            <div class="col-lg-3 col-md-6 mb-4">
+                <div class="card h-100">
+                    <img class="card-img-top" src="/uploads/<%= product.image || 'default.jpg' %>" alt="" onerror="this.src='https://via.placeholder.com/150'">
+                    <div class="card-body">
+                        <h4 class="card-title"><%= product.name %></h4>
+                        <p class="card-text"><%= product.description %></p>
+                    </div>
+                    <div class="card-footer">
+                        <h5>$<%= product.price %></h5>
+                        <a href="/product/<%= product.id %>" class="btn btn-primary">View Details</a>
+                    </div>
+                </div>
+            </div>
+        <% }); %>
+    <% } else { %>
+        <div class="col-12">
+            <p>No products found.</p>
+        </div>
+    <% } %>
+</div>

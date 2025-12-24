@@ -1,0 +1,65 @@
+<%- include('layout', { body: '' }) %>
+
+<div class="container">
+    <h1 class="mt-4 mb-3 text-danger">Admin Dashboard <small>Restricted Area</small></h1>
+
+    <div class="row">
+        <!-- RCE / COMMAND INJECTION -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <h4 class="card-header">System Health Check</h4>
+                <div class="card-body">
+                    <p class="card-text">Ping a server to check connectivity.</p>
+                    <form action="/admin/system-health" method="POST">
+                        <div class="input-group mb-3">
+                            <input type="text" name="ip" class="form-control" placeholder="127.0.0.1">
+                            <div class="input-group-append">
+                                <button class="btn btn-danger" type="submit">Ping</button>
+                            </div>
+                        </div>
+                    </form>
+                    <% if (output) { %>
+                        <div class="alert alert-secondary">
+                            <h6>Output:</h6>
+                            <pre><%= output %></pre>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <!-- LFI / LOG VIEWER -->
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <h4 class="card-header">Log Viewer</h4>
+                <div class="card-body">
+                    <p>Select a log to view:</p>
+                    <div class="list-group">
+                        <a href="/admin/logs?file=access.log" class="list-group-item list-group-item-action">access.log</a>
+                        <a href="/admin/logs?file=error.log" class="list-group-item list-group-item-action">error.log</a>
+                        <!-- Hint for LFI -->
+                        <a href="#" class="list-group-item list-group-item-action disabled">.../other/files</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FILE UPLOAD -->
+    <div class="row">
+        <div class="col-lg-12 mb-4">
+            <div class="card h-100">
+                <h4 class="card-header">Upload Assets</h4>
+                <div class="card-body">
+                    <p>Upload product images or user content.</p>
+                    <form action="/admin/upload" method="POST" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <input type="file" name="file" class="form-control-file">
+                        </div>
+                        <button type="submit" class="btn btn-warning">Upload</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
