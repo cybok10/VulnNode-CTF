@@ -1,0 +1,21 @@
+<%- include('partials/header') %>
+
+<div class="auth-box mt-5">
+    <div class="text-center mb-4">
+        <h2 class="text-primary"><i class="fa-solid fa-user-secret"></i> Report Issue</h2>
+        <p class="text-muted">Found a bug? Send the URL to our Admin.</p>
+    </div>
+
+    <form action="/report" method="POST">
+        <div class="mb-3">
+            <label for="url" class="form-label">Page URL to Review</label>
+            <input type="text" class="form-control" id="url" name="url" placeholder="http://localhost:3000/search?q=<script>..." required>
+            <div class="form-text text-muted">The admin will visit this link automatically.</div>
+        </div>
+        <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Submit Report</button>
+        </div>
+    </form>
+</div>
+
+<%- include('partials/footer') %>

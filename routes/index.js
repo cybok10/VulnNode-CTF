@@ -1,76 +1,58 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-const secrets = require('../config/secrets');
-const { weakSanitize } = require('../utils/helper');
+const db = require('../utils/db');
+const bot = require('../utils/bot');
 
-// Connect to the database
-const db = new sqlite3.Database(secrets.DB_PATH);
-
-/**
- * GET /
- * Home Page - Lists products
- */
+// Home Page - Lists Products
 router.get('/', (req, res) => {
     const query = "SELECT * FROM products";
-    
     db.all(query, [], (err, products) => {
         if (err) {
-            console.error(err);
-            return res.status(500).send("Database Error");
+            return res.status(500).send("Database error");
         }
         res.render('index', { 
+            user: req.session.user, 
             products: products, 
-            user: req.session.user,
-            searchTerm: '' 
+            title: 'Home' 
         });
     });
 });
 
-/**
- * GET /search
- * Search functionality vulnerable to SQL Injection and XSS
- */
+// VULNERABILITY: SQL Injection via 'q' parameter
+// The user input is concatenated directly into the query string.
 router.get('/search', (req, res) => {
-    const searchTerm = req.query.q;
-
-    if (!searchTerm) {
-        return res.redirect('/');
-    }
-
-    // ============================================================
-    // VULNERABILITY: SQL INJECTION (Union-Based / Error-Based)
-    // ============================================================
-    // The input 'searchTerm' is concatenated directly into the query string.
-    // An attacker can input: ' UNION SELECT 1, name, value, 4 FROM secrets --
-    // This would append the secret flags to the product list.
+    const searchQuery = req.query.q;
     
-    const query = "SELECT * FROM products WHERE name LIKE '%" + searchTerm + "%'";
+    // UNSAFE QUERY CONSTRUCTION
+    const sql = `SELECT * FROM products WHERE name LIKE '%${searchQuery}%'`;
 
-    console.log(`[DEBUG] Executing Query: ${query}`); // VULNERABILITY: Info Leak in logs
-
-    db.all(query, [], (err, products) => {
+    db.all(sql, [], (err, products) => {
         if (err) {
-            // VULNERABILITY: Verbose Error Message (helps SQLi enumeration)
-            return res.status(500).send(`
-                <h3>Database Error</h3>
-                <p>Query Failed: ${query}</p>
-                <pre>${err.message}</pre>
-                <!-- FLAG{verbose_sql_errors_are_bad} -->
-            `);
+            // Error based SQL Injection: Sending the DB error back to the user
+            return res.status(500).send(`Database Error: ${err.message}`);
         }
-
-        // VULNERABILITY: REFLECTED XSS
-        // We are passing 'searchTerm' back to the view. 
-        // If the view renders this with <%- %> instead of <%= %>, scripts will execute.
-        // Example payload: <script>alert(1)</script>
-        
         res.render('index', { 
+            user: req.session.user, 
             products: products, 
-            user: req.session.user,
-            searchTerm: searchTerm 
+            title: `Search: ${searchQuery}` 
         });
     });
+});
+
+// Report Page (XSS Trigger)
+router.get('/report', (req, res) => {
+    res.render('report', { user: req.session.user, title: 'Report Issue' });
+});
+
+// POST Route for the Admin Bot
+router.post('/report', async (req, res) => {
+    const { url } = req.body;
+    if (!url) return res.status(400).send("URL is required");
+
+    // In background, trigger the bot
+    bot.visitUrl(url).catch(err => console.error(err));
+
+    res.send("Admin has been notified and will review your link shortly.");
 });
 
 module.exports = router;

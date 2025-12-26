@@ -1,0 +1,87 @@
+<%- include('layout', { body: '' }) %>
+
+<div class="container mt-4">
+    <div class="text-center mb-5 fade-in">
+        <h1 class="display-4 text-warning">Hacking Scoreboard</h1>
+        <p class="lead">Track your progress and domination.</p>
+        
+        <div class="progress mt-3" style="height: 25px; background-color: #444;">
+            <div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" 
+                 role="progressbar" 
+                 style="width: <%= percent %>%;" 
+                 aria-valuenow="<%= percent %>" 
+                 aria-valuemin="0" 
+                 aria-valuemax="100">
+                 <%= percent %>% Complete
+            </div>
+        </div>
+    </div>
+
+    <!-- Flag Submission Area -->
+    <div class="row justify-content-center mb-5 fade-in">
+        <div class="col-md-8">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <form id="flagForm" class="form-inline justify-content-center">
+                        <label class="sr-only">Flag</label>
+                        <input type="text" class="form-control mb-2 mr-sm-2 w-50" id="flagInput" placeholder="FLAG{...}">
+                        <button type="submit" class="btn btn-primary mb-2">Submit Flag</button>
+                    </form>
+                    <div id="flagResult" class="text-center mt-2 font-weight-bold"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Challenge Grid -->
+    <div class="row">
+        <% challenges.forEach(function(chal) { %>
+            <div class="col-md-4 mb-4 fade-in">
+                <div class="card h-100 <%= chal.solved ? 'challenge-solved' : 'challenge-unsolved' %>">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><%= chal.name %></span>
+                        <span class="badge badge-difficulty-<%= chal.difficulty %>">
+                            <%= '*'.repeat(chal.difficulty) %>
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted"><%= chal.category %></h6>
+                        <p class="card-text"><%= chal.description %></p>
+                    </div>
+                    <div class="card-footer text-center">
+                        <% if (chal.solved) { %>
+                            <span class="text-success">✔ SOLVED</span>
+                        <% } else { %>
+                            <span class="text-danger">✘ LOCKED</span>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        <% }); %>
+    </div>
+</div>
+
+<script>
+    // Simple AJAX for Flag Submission
+    document.getElementById('flagForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const flag = document.getElementById('flagInput').value;
+        
+        fetch('/scoreboard/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ flag: flag })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const resultDiv = document.getElementById('flagResult');
+            resultDiv.innerText = data.message;
+            if (data.success) {
+                resultDiv.className = "text-center mt-2 text-success";
+                setTimeout(() => location.reload(), 1500); // Reload to update UI
+            } else {
+                resultDiv.className = "text-center mt-2 text-danger";
+            }
+        });
+    });
+</script>

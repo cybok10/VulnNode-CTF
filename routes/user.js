@@ -1,48 +1,64 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-const secrets = require('../config/secrets');
+const db = require('../utils/db');
+const bcrypt = require('bcryptjs');
 
-const db = new sqlite3.Database(secrets.DB_PATH);
+router.get('/login', (req, res) => res.render('login', { user: null, title: 'Login' }));
+router.get('/register', (req, res) => res.render('register', { user: null, title: 'Register' }));
 
-// Middleware to ensure login
-function ensureAuthenticated(req, res, next) {
-    if (req.session.user) {
-        return next();
-    }
-    res.redirect('/auth/login');
-}
+// Register
+router.post('/register', (req, res) => {
+    const { username, password, email } = req.body;
+    // Weakness: No password complexity check
+    const hash = bcrypt.hashSync(password, 10);
 
-router.use(ensureAuthenticated);
-
-/**
- * GET /user/profile/:id
- * VULNERABILITY: IDOR (Insecure Direct Object Reference)
- */
-router.get('/profile/:id', (req, res) => {
-    const requestedId = req.params.id;
-
-    // ============================================================
-    // VULNERABILITY: IDOR
-    // ============================================================
-    // We trust the 'id' parameter from the URL completely.
-    // Secure code would check: if (req.session.user.id !== requestedId) return 403;
-    // Here, we just query the DB for whoever is asked for.
-
-    const query = "SELECT id, username, email, isAdmin, profile_pic FROM users WHERE id = ?";
-    
-    db.get(query, [requestedId], (err, user) => {
-        if (err || !user) {
-            return res.status(404).send("User not found");
+    const stmt = db.prepare("INSERT INTO users (username, password, email) VALUES (?, ?, ?)");
+    stmt.run(username, hash, email, (err) => {
+        if (err) {
+            return res.render('register', { user: null, title: 'Register', error: 'Username taken' });
         }
-        
-        // VULNERABILITY: Information Disclosure
-        // We render the 'dashboard' view with the target user's data.
-        res.render('dashboard', { 
-            profileUser: user, 
-            currentUser: req.session.user 
-        });
+        res.redirect('/auth/login');
     });
+    stmt.finalize();
+});
+
+// Login logic
+router.post('/login', (req, res) => {
+    const { username, password } = req.body;
+
+    db.get("SELECT * FROM users WHERE username = ?", [username], (err, row) => {
+        if (err) return res.status(500).send("Error");
+        
+        if (!row) {
+            return res.render('login', { user: null, title: 'Login', error: 'Invalid credentials' });
+        }
+
+        const valid = bcrypt.compareSync(password, row.password);
+        if (valid) {
+            // Set session
+            req.session.user = {
+                id: row.id,
+                username: row.username,
+                isAdmin: row.isAdmin,
+                balance: row.balance,
+                avatar: row.avatar
+            };
+            
+            // Generate a fake 'admin token' cookie if user is admin (for ease of CTF exploitation)
+            if(row.isAdmin) {
+                res.cookie('token', require('../config/secrets').adminToken);
+            }
+
+            return res.redirect('/user/dashboard');
+        } else {
+            return res.render('login', { user: null, title: 'Login', error: 'Invalid credentials' });
+        }
+    });
+});
+
+router.get('/logout', (req, res) => {
+    req.session.destroy();
+    res.redirect('/');
 });
 
 module.exports = router;

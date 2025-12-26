@@ -1,14 +1,18 @@
+
+
 module.exports = {
-    // VULNERABILITY: Weak, hardcoded JWT secret
-    JWT_SECRET: "vuln_node_ctf_super_secret_key_123",
+    // Weak secret for JWT signing (Vulnerability: Weak Key / Brute-forceable)
+    jwtSecret: 'secret123',
     
-    // VULNERABILITY: Admin credentials committed to code
-    ADMIN_USER: "admin",
+    // Admin Session Token for the Bot (Vulnerability: Hardcoded Admin Creds)
+    adminToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiaXNBZG1pbiI6dHJ1ZX0.SignatureHere',
+    
+     ADMIN_USER: "admin",
     ADMIN_PASS: "admin123", // Weak password
     
-    // VULNERABILITY: Database configuration exposed
-    DB_PATH: "./database/vuln_app.db",
+    // Flag for the Admin Bot to hold
+    flagXSS: 'CTF{xss_chained_to_local_file_read}',
     
-    // Flag for finding this file
-    FLAG: "FLAG{hardcoded_secrets_in_config_file}"
+    // DB Path
+    dbPath: './database/vuln_app.db'
 };

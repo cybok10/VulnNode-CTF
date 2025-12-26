@@ -1,74 +1,60 @@
+<%- include('partials/header') %>
 
-
-<%- include('layout', { body: '' }) %>
-
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card">
-                <img src="https://via.placeholder.com/150" class="card-img-top p-3" alt="Profile Pic">
-                <div class="card-body text-center">
-                    <h5 class="card-title"><%= profileUser.username %></h5>
-                    <% if (profileUser.isAdmin) { %>
-                        <span class="badge badge-danger">Administrator</span>
-                    <% } else { %>
-                        <span class="badge badge-secondary">Standard User</span>
-                    <% } %>
+<div class="row">
+    <div class="col-md-4">
+        <div class="card text-center mb-4">
+            <div class="card-body">
+                <img src="<%= user.avatar %>" class="profile-avatar rounded-circle mb-3" alt="User Avatar">
+                <h3 class="card-title"><%= user.username %></h3>
+                <p class="text-muted"><%= user.email %></p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-warning" type="button">Balance: $<%= user.balance.toFixed(2) %></button>
                 </div>
             </div>
         </div>
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    User Profile Details
-                </div>
+
+        <% if (typeof userPrefs !== 'undefined' && Object.keys(userPrefs).length > 0) { %>
+            <div class="card mb-4 border-danger">
+                <div class="card-header text-danger"><i class="fa-solid fa-gear"></i> Dev Debug: Preferences</div>
                 <div class="card-body">
-                    <form>
-                        <div class="form-group row">
-                            <label class="col-sm-2 col-form-label">User ID</label>
-                            <div class="col-sm-10">
-                                <input type="text" readonly class="form-control-plaintext" value="<%= profileUser.id %>">
-                            </div>
-                        </div>
-                        <div class="form-group row">
-                            <label class="col-sm-2 col-form-label">Email</label>
-                            <div class="col-sm-10">
-                                <input type="text" readonly class="form-control-plaintext" value="<%= profileUser.email %>">
-                            </div>
-                        </div>
-                        
-                        <!-- IDOR HINT -->
-                        <% if (currentUser.id != profileUser.id) { %>
-                            <div class="alert alert-warning mt-3">
-                                <strong>Warning:</strong> You are viewing a profile that does not belong to you.
-                                <!-- FLAG{IDOR_profile_viewer_success} -->
-                            </div>
-                        <% } %>
-                    </form>
+                    <small class="text-muted">Parsed from 'user_prefs' cookie:</small>
+                    <pre class="text-warning mt-2"><%= JSON.stringify(userPrefs, null, 2) %></pre>
                 </div>
             </div>
+        <% } %>
+    </div>
 
-            <div class="card mt-4 border-danger">
-                <div class="card-header bg-danger text-white">
-                    API Testing Console (Debug)
-                </div>
-                <div class="card-body">
-                    <p>Developers left this here to test the API easily.</p>
-                    <form action="/api/users/<%= profileUser.id %>" method="POST">
-                        <div class="form-group">
-                            <label>Update User JSON Payload:</label>
-                            <textarea name="payload" class="form-control" rows="3">{"isAdmin": 1}</textarea>
-                            <small class="form-text text-muted">Warning: This endpoint relies on Mass Assignment.</small>
-                        </div>
-                        <!-- Simple hack to make the form send JSON-like keys for the node backend to parse via bodyParser.json() logic 
-                             In reality, bodyParser.urlencoded won't parse nested JSON string nicely without work, 
-                             so we will assume the attacker uses Postman/Curl or we rely on the specific body parser setup.
-                             For this lab, let's keep it simple: The attacker should use Curl/Burp. 
-                             This form is just a visual hint. -->
-                        <button type="button" class="btn btn-outline-danger" disabled>Use cURL or Burp to exploit this!</button>
-                    </form>
-                </div>
+    <div class="col-md-8">
+        
+        <div class="card mb-4">
+            <div class="card-header bg-dark border-bottom border-secondary">
+                <h5 class="mb-0 text-primary"><i class="fa-solid fa-cloud-arrow-down"></i> Import Avatar</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Import an avatar from a remote URL.</p>
+                <form action="/user/import-avatar" method="POST">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text bg-secondary border-secondary text-white">URL</span>
+                        <input type="text" class="form-control" name="imageUrl" placeholder="http://example.com/image.png">
+                        <button class="btn btn-primary" type="submit">Import</button>
+                    </div>
+                </form>
+                <small class="text-danger">* This server will fetch the URL directly.</small>
             </div>
         </div>
+
+        <div class="card">
+            <div class="card-header bg-dark border-bottom border-secondary">
+                <h5 class="mb-0 text-info"><i class="fa-solid fa-code"></i> Developer API</h5>
+            </div>
+            <div class="card-body">
+                <p>Your User ID is <strong><%= user.id %></strong>.</p>
+                <p>You can retrieve your raw data via: <code class="text-warning">GET /api/users/<%= user.id %></code></p>
+                <a href="/api/users/<%= user.id %>" target="_blank" class="btn btn-sm btn-outline-info">Test API</a>
+            </div>
+        </div>
+
     </div>
 </div>
+
+<%- include('partials/footer') %>

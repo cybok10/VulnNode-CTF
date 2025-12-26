@@ -1,0 +1,73 @@
+<%- include('layout', { body: '' }) %>
+
+<div class="container fade-in">
+    <div class="py-5 text-center">
+        <h1 class="display-4 text-primary">📦 Order Products</h1>
+        <p class="lead">Purchase items using your company credits.</p>
+        
+        <div class="card bg-dark border-primary d-inline-block p-3">
+            <h4 class="m-0 text-light">
+                Current Balance: <span class="text-success">$<%= user.balance ? user.balance.toFixed(2) : '0.00' %></span>
+            </h4>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    Place an Order
+                </div>
+                <div class="card-body">
+                    <form action="/order/checkout" method="POST">
+                        
+                        <!-- Product Selection -->
+                        <div class="form-group">
+                            <label for="product">Select Product</label>
+                            <select class="form-control" id="product" name="product_id">
+                                <% products.forEach(function(product) { %>
+                                    <option value="<%= product.id %>">
+                                        <%= product.name %> - $<%= product.price %>
+                                    </option>
+                                <% }); %>
+                            </select>
+                        </div>
+
+                        <!-- Quantity Input -->
+                        <!-- 
+                           VULNERABILITY HINT: 
+                           We are relying on HTML5 validation (min="1") here.
+                           What happens if you intercept the request and send "-100"?
+                        -->
+                        <div class="form-group">
+                            <label for="quantity">Quantity</label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="quantity" 
+                                   name="quantity" 
+                                   min="1" 
+                                   value="1" 
+                                   required>
+                            <small class="form-text text-muted">
+                                Please enter a valid quantity (1 or more).
+                            </small>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg btn-block">
+                            <i class="fas fa-shopping-cart"></i> Purchase
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Hint Section (Visible on Easy Mode usually, but hardcoded here for learning) -->
+            <div class="alert alert-info mt-4">
+                <h5 class="alert-heading"><i class="fas fa-info-circle"></i> Tester Note</h5>
+                <p class="mb-0">
+                    Our billing system calculates <code>Total = Price * Quantity</code> and subtracts it from your balance.
+                    We trust the browser to only send positive quantities. Is that safe?
+                </p>
+            </div>
+        </div>
+    </div>
+</div>

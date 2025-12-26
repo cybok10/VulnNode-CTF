@@ -1,44 +1,35 @@
-<%- include('layout', { body: '' }) %>
+<%- include('partials/header') %>
 
-<div class="jumbotron my-4">
-    <h1 class="display-3">Welcome to VulnNode Shop!</h1>
-    <p class="lead">The most insecure e-commerce platform on the web.</p>
-    
-    <!-- SEARCH FORM: Target for SQL Injection -->
-    <form action="/search" method="GET" class="form-inline my-2 my-lg-0">
-        <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search products..." aria-label="Search">
-        <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Search</button>
-    </form>
+<div class="p-5 mb-4 bg-dark border border-secondary rounded-3 text-center">
+    <div class="container-fluid py-5">
+        <h1 class="display-5 fw-bold text-primary">Welcome to VulnNode</h1>
+        <p class="col-md-8 fs-4 mx-auto text-muted">The safest place to buy developer tools and hacker gadgets. (Definitely not vulnerable).</p>
+        <a href="#products" class="btn btn-outline-primary btn-lg">Shop Now</a>
+    </div>
 </div>
 
-<!-- VULNERABILITY: REFLECTED XSS -->
-<!-- If searchTerm exists, we print it raw using <%- %> instead of escaped <%= %> -->
-<% if (typeof searchTerm !== 'undefined' && searchTerm) { %>
-    <div class="alert alert-info">
-        <h4>Search Results for: <%- searchTerm %></h4>
-    </div>
-<% } %>
-
-<div class="row text-center">
+<div id="products" class="row row-cols-1 row-cols-md-3 g-4">
     <% if (products.length > 0) { %>
         <% products.forEach(function(product) { %>
-            <div class="col-lg-3 col-md-6 mb-4">
+            <div class="col">
                 <div class="card h-100">
-                    <img class="card-img-top" src="/uploads/<%= product.image || 'default.jpg' %>" alt="" onerror="this.src='https://via.placeholder.com/150'">
-                    <div class="card-body">
-                        <h4 class="card-title"><%= product.name %></h4>
-                        <p class="card-text"><%= product.description %></p>
+                    <img src="<%= product.image %>" class="card-img-top p-3" alt="<%= product.name %>" style="height: 200px; object-fit: contain;">
+                    <div class="card-body border-top border-secondary">
+                        <h5 class="card-title"><%= product.name %></h5>
+                        <p class="card-text text-muted"><%= product.description %></p>
+                        <h4 class="text-white">$<%= product.price %></h4>
                     </div>
-                    <div class="card-footer">
-                        <h5>$<%= product.price %></h5>
-                        <a href="/product/<%= product.id %>" class="btn btn-primary">View Details</a>
+                    <div class="card-footer border-secondary bg-transparent d-grid">
+                        <a href="/products/<%= product.id %>" class="btn btn-primary">View Details</a>
                     </div>
                 </div>
             </div>
         <% }); %>
     <% } else { %>
-        <div class="col-12">
-            <p>No products found.</p>
+        <div class="col-12 text-center text-muted">
+            <h3>No products found.</h3>
         </div>
     <% } %>
 </div>
+
+<%- include('partials/footer') %>

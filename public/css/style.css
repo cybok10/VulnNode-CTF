@@ -1,70 +1,63 @@
+/* Dark Mode Overrides and Custom Styles */
 body {
-    padding-top: 56px;
-    background-color: #f4f6f9;
-}
-
-.jumbotron {
-    background-color: #e9ecef;
-    border-radius: 0.3rem;
-    padding: 4rem 2rem;
-    margin-bottom: 2rem;
+    background-color: #121212;
+    color: #e0e0e0;
 }
 
 .card {
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    border: none;
+    background-color: #1e1e1e;
+    border: 1px solid #333;
     transition: transform 0.2s;
 }
 
 .card:hover {
     transform: translateY(-5px);
+    box-shadow: 0 4px 15px rgba(0, 255, 136, 0.1);
 }
 
-.footer {
-    padding: 30px 0;
-    background-color: #343a40;
+.card-title {
+    color: #00ff88; /* Cyberpunk Green */
+}
+
+.btn-primary {
+    background-color: #00ff88;
+    border-color: #00ff88;
+    color: #000;
+    font-weight: bold;
+}
+
+.btn-primary:hover {
+    background-color: #00cc6a;
+    border-color: #00cc6a;
+}
+
+.form-control {
+    background-color: #2c2c2c;
+    border-color: #444;
     color: #fff;
-    margin-top: 50px;
 }
 
-/* Vulnerable Badge Animation */
-.vulnerable-badge {
-    background-color: #dc3545;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 0.7em;
-    animation: pulse 2s infinite;
+.form-control:focus {
+    background-color: #333;
+    color: #fff;
+    border-color: #00ff88;
+    box-shadow: 0 0 0 0.25rem rgba(0, 255, 136, 0.25);
 }
 
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.7; }
-    100% { opacity: 1; }
+/* Auth Pages */
+.auth-box {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: #1e1e1e;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
 }
 
-/* Chat Widget (Fake) */
-#chat-widget {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 300px;
-    background: white;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    display: none;
-    z-index: 1000;
-}
-
-#chat-header {
-    background: #007bff;
-    color: white;
-    padding: 10px;
-    cursor: pointer;
-}
-
-#chat-body {
-    padding: 10px;
-    height: 200px;
-    overflow-y: auto;
+/* Avatar Image */
+.profile-avatar {
+    width: 150px;
+    height: 150px;
+    object-fit: cover;
+    border: 3px solid #00ff88;
 }
