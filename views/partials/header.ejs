@@ -11,7 +11,7 @@
 <body>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary mb-4">
-    <div class="container">
+    <div class="container-fluid">
         <a class="navbar-brand text-primary fw-bold" href="/">
             <i class="fa-solid fa-bug"></i> VulnNode Shop
         </a>
@@ -21,34 +21,104 @@
         
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link" href="/">Products</a></li>
-                <li class="nav-item"><a class="nav-link text-danger" href="/report">Report Issue</a></li> </ul>
+                <li class="nav-item"><a class="nav-link" href="/"><i class="fa-solid fa-home"></i> Products</a></li>
+                
+                <% if (user) { %>
+                    <!-- Cart for logged-in users -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="/cart">
+                            <i class="fa-solid fa-shopping-cart"></i> Cart 
+                            <span class="badge bg-success" id="cart-count">0</span>
+                        </a>
+                    </li>
+                    
+                    <!-- Support Tickets -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="/support">
+                            <i class="fa-solid fa-ticket"></i> Support
+                        </a>
+                    </li>
+                    
+                    <!-- Orders -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="/orders">
+                            <i class="fa-solid fa-box"></i> Orders
+                        </a>
+                    </li>
+                <% } %>
+                
+                <!-- Report Issue (XSS target) -->
+                <li class="nav-item">
+                    <a class="nav-link text-danger" href="/report">
+                        <i class="fa-solid fa-flag"></i> Report Issue
+                    </a>
+                </li>
+            </ul>
             
+            <!-- Search Form (SQL Injection) -->
             <form class="d-flex me-3" action="/search" method="GET">
-                <input class="form-control me-2" type="search" name="q" placeholder="Search..." aria-label="Search">
-                <button class="btn btn-outline-success" type="submit">Search</button>
+                <input class="form-control me-2" type="search" name="q" placeholder="Search products..." aria-label="Search">
+                <button class="btn btn-outline-success" type="submit">
+                    <i class="fa-solid fa-search"></i>
+                </button>
             </form>
 
+            <!-- User Menu -->
             <ul class="navbar-nav">
                 <% if (user) { %>
+                    <!-- Admin Panel Link (if admin) -->
+                    <% if (user.isAdmin) { %>
+                        <li class="nav-item">
+                            <a class="nav-link text-warning" href="/admin">
+                                <i class="fa-solid fa-crown"></i> Admin
+                            </a>
+                        </li>
+                    <% } %>
+                    
+                    <!-- User Dropdown -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                            <img src="<%= user.avatar || '/img/avatars/default.png' %>" class="rounded-circle" width="30" height="30" alt="Avatar">
-                            <%= user.username %> ($<%= user.balance ? user.balance.toFixed(2) : '0.00' %>)
+                            <img src="<%= user.avatar || '/img/avatars/default.png' %>" class="rounded-circle" width="30" height="30" alt="Avatar" onerror="this.src='/img/avatars/default.png'">
+                            <%= user.username %> 
+                            <span class="badge bg-primary">$<%= user.balance ? user.balance.toFixed(2) : '0.00' %></span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="/user/dashboard">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/user/dashboard"><i class="fa-solid fa-user"></i> Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/orders"><i class="fa-solid fa-box"></i> My Orders</a></li>
+                            <li><a class="dropdown-item" href="/support"><i class="fa-solid fa-ticket"></i> Support Tickets</a></li>
+                            <li><a class="dropdown-item" href="/user/profile"><i class="fa-solid fa-cog"></i> Settings</a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="/auth/logout">Logout</a></li>
+                            <li><a class="dropdown-item text-danger" href="/auth/logout"><i class="fa-solid fa-sign-out-alt"></i> Logout</a></li>
                         </ul>
                     </li>
                 <% } else { %>
-                    <li class="nav-item"><a class="nav-link" href="/auth/login">Login</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/auth/register">Register</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/auth/login"><i class="fa-solid fa-sign-in-alt"></i> Login</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/auth/register"><i class="fa-solid fa-user-plus"></i> Register</a></li>
                 <% } %>
             </ul>
         </div>
     </div>
 </nav>
 
+<!-- Alert Container for Messages -->
+<div class="container">
+    <div id="alert-container"></div>
+</div>
+
 <div class="container min-vh-100">
+
+<!-- Cart Counter Script -->
+<% if (user) { %>
+<script>
+// Load cart count on page load
+fetch('/api/cart')
+    .then(res => res.json())
+    .then(data => {
+        if (data.items) {
+            const count = data.items.reduce((sum, item) => sum + item.quantity, 0);
+            document.getElementById('cart-count').textContent = count;
+        }
+    })
+    .catch(err => console.error('Cart load error:', err));
+</script>
+<% } %>
