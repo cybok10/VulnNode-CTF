@@ -1,19 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../utils/db');
-const bot = require('../utils/bot');
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('./database/vuln_app.db');
 
-// Home Page - Lists Products
+// Home Page - Lists Products (excluding hidden ones)
 router.get('/', (req, res) => {
-    const query = "SELECT * FROM products";
+    const query = "SELECT * FROM products WHERE is_hidden = 0 OR is_hidden IS NULL ORDER BY is_featured DESC, created_at DESC";
     db.all(query, [], (err, products) => {
         if (err) {
-            return res.status(500).send("Database error");
+            console.error('Database error:', err);
+            return res.render('index', {
+                user: req.session.user,
+                products: [],
+                title: 'Home'
+            });
         }
         res.render('index', { 
             user: req.session.user, 
-            products: products, 
-            title: 'Home' 
+            products: products || [], 
+            title: 'VulnNode Shop - Home' 
         });
     });
 });
@@ -21,20 +26,31 @@ router.get('/', (req, res) => {
 // VULNERABILITY: SQL Injection via 'q' parameter
 // The user input is concatenated directly into the query string.
 router.get('/search', (req, res) => {
-    const searchQuery = req.query.q;
+    const searchQuery = req.query.q || '';
     
-    // UNSAFE QUERY CONSTRUCTION
-    const sql = `SELECT * FROM products WHERE name LIKE '%${searchQuery}%'`;
+    if (!searchQuery) {
+        return res.redirect('/');
+    }
+    
+    // UNSAFE QUERY CONSTRUCTION (intentional vulnerability)
+    const sql = `SELECT * FROM products WHERE (name LIKE '%${searchQuery}%' OR description LIKE '%${searchQuery}%' OR tags LIKE '%${searchQuery}%') AND (is_hidden = 0 OR is_hidden IS NULL)`;
 
     db.all(sql, [], (err, products) => {
         if (err) {
-            // Error based SQL Injection: Sending the DB error back to the user
-            return res.status(500).send(`Database Error: ${err.message}`);
+            // VULNERABILITY: Error based SQL Injection - Sending the DB error back to the user
+            return res.status(500).send(`
+                <div style="background: #1a1a1a; color: #ff6b6b; padding: 20px; font-family: monospace;">
+                    <h2>Database Error</h2>
+                    <pre>${err.message}</pre>
+                    <p style="color: #ffd93d;">💡 Hint: Try SQL injection payloads in the search box</p>
+                    <a href="/" style="color: #6bcf7f;">← Back to Home</a>
+                </div>
+            `);
         }
         res.render('index', { 
             user: req.session.user, 
-            products: products, 
-            title: `Search: ${searchQuery}` 
+            products: products || [], 
+            title: `Search Results: ${searchQuery}` 
         });
     });
 });
@@ -47,12 +63,32 @@ router.get('/report', (req, res) => {
 // POST Route for the Admin Bot
 router.post('/report', async (req, res) => {
     const { url } = req.body;
-    if (!url) return res.status(400).send("URL is required");
+    if (!url) {
+        return res.status(400).send("URL is required");
+    }
 
-    // In background, trigger the bot
-    bot.visitUrl(url).catch(err => console.error(err));
-
-    res.send("Admin has been notified and will review your link shortly.");
+    // In background, trigger the bot (if bot.js exists)
+    try {
+        const bot = require('../utils/bot');
+        bot.visitUrl(url).catch(err => console.error('[BOT ERROR]:', err));
+        res.send(`
+            <div style="background: #1a1a1a; color: #6bcf7f; padding: 30px; text-align: center; font-family: Arial;">
+                <h2>✓ Report Submitted</h2>
+                <p>Admin has been notified and will review your link shortly.</p>
+                <a href="/" style="color: #6bcf7f; text-decoration: none;">← Back to Home</a>
+            </div>
+        `);
+    } catch (err) {
+        console.error('[BOT] Bot module not found or error:', err.message);
+        res.send(`
+            <div style="background: #1a1a1a; color: #6bcf7f; padding: 30px; text-align: center; font-family: Arial;">
+                <h2>✓ Report Submitted</h2>
+                <p>Your report has been logged. Admin will review it soon.</p>
+                <p style="color: #888; font-size: 12px;">(Bot feature not configured)</p>
+                <a href="/" style="color: #6bcf7f; text-decoration: none;">← Back to Home</a>
+            </div>
+        `);
+    }
 });
 
 module.exports = router;
