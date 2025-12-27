@@ -13,6 +13,7 @@ app.set('views', path.join(__dirname, 'views'));
 
 // --- Middleware ---
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Serve uploaded files
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
@@ -47,22 +48,91 @@ const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/product');
 const userRoutes = require('./routes/user');
 const apiRoutes = require('./routes/api');
-// const adminRoutes = require('./routes/admin'); // To be added next
 
+// NEW ROUTES - Added from our development
+const productsApiRoutes = require('./routes/products'); // Enhanced product API
+const cartRoutes = require('./routes/cart');             // Shopping cart
+const checkoutRoutes = require('./routes/checkout');     // Checkout process
+const supportRoutes = require('./routes/support');       // Support tickets
+const uploadRoutes = require('./routes/upload');         // File upload
+const adminRoutes = require('./routes/admin');           // Admin panel
+
+// Main application routes
 app.use('/', indexRoutes);
 app.use('/auth', authRoutes);
-app.use('/products', productRoutes);
+app.use('/products', productRoutes);  // Frontend product routes
 app.use('/user', userRoutes);
 app.use('/api', apiRoutes);
-// app.use('/admin', adminRoutes);
+
+// New API routes
+app.use('/api/products', productsApiRoutes);  // Enhanced product API with vulnerabilities
+app.use('/api/cart', cartRoutes);             // Cart operations
+app.use('/api/checkout', checkoutRoutes);     // Checkout and orders
+app.use('/api/support', supportRoutes);       // Support ticket system
+app.use('/api/upload', uploadRoutes);         // File upload endpoints
+app.use('/api/admin', adminRoutes);           // Admin panel endpoints
+
+// Alternative mounting (if you prefer /cart instead of /api/cart)
+app.use('/cart', cartRoutes);         
+app.use('/checkout', checkoutRoutes);
+
+// --- Health Check Endpoint ---
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'running',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        vulnerabilities: 'MANY - This is intentional!'
+    });
+});
+
+// --- Server Info (Information Disclosure) ---
+app.get('/serverinfo', (req, res) => {
+    // VULNERABILITY: Exposing sensitive server information
+    res.json({
+        node_version: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        memory: process.memoryUsage(),
+        env: process.env,  // CRITICAL: Exposing all environment variables
+        cwd: process.cwd(),
+        pid: process.pid
+    });
+});
 
 // --- Error Handling ---
 app.use((req, res) => {
     res.status(404).render('partials/header', { user: req.session.user, title: '404' });
 });
 
+// --- Start Server ---
 app.listen(PORT, () => {
-    console.log(`\n[+] VulnNode Shop running at http://localhost:${PORT}`);
-    console.log(`[!] WARNING: This application contains critical vulnerabilities.`);
-    console.log(`[!] Do not deploy in a production environment.\n`);
+    console.log(`\n============================================================`);
+    console.log(`   VulnNode-CTF v2.0 - Intentionally Vulnerable E-Commerce`);
+    console.log(`============================================================`);
+    console.log(`[!] WARNING: This application contains CRITICAL vulnerabilities`);
+    console.log(`[!] - SQL Injection`);
+    console.log(`[!] - XSS (Stored & Reflected)`);
+    console.log(`[!] - IDOR`);
+    console.log(`[!] - Command Injection`);
+    console.log(`[!] - File Upload`);
+    console.log(`[!] - SSRF`);
+    console.log(`[!] - LFI`);
+    console.log(`[!] - Insecure Deserialization`);
+    console.log(`[!] - Authentication Bypass`);
+    console.log(`[!] - Business Logic Flaws`);
+    console.log(`[!] - And many more...`);
+    console.log(``);
+    console.log(`[+] Server Status: RUNNING`);
+    console.log(`[+] Port: ${PORT}`);
+    console.log(`[+] URL: http://localhost:${PORT}`);
+    console.log(`[+] API Base: http://localhost:${PORT}/api`);
+    console.log(``);
+    console.log(`[*] Default Credentials:`);
+    console.log(`    Admin: admin / admin123`);
+    console.log(`    User:  alice / alice123`);
+    console.log(``);
+    console.log(`[*] Do NOT deploy in production!`);
+    console.log(`[*] For educational purposes only.`);
+    console.log(`============================================================\n`);
 });
