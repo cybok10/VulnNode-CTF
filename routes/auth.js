@@ -86,7 +86,8 @@ router.post('/login', (req, res) => {
             // Log successful login (information disclosure)
             console.log(`[+] User logged in: ${user.username} from ${req.ip}`);
 
-            return res.redirect('/user/dashboard');
+            // FIXED: Redirect to homepage instead of dashboard
+            return res.redirect('/');
         } else {
             // VULNERABILITY: Reveals password is incorrect
             return res.render('login', { 
