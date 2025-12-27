@@ -49,7 +49,7 @@ const productRoutes = require('./routes/product');
 const userRoutes = require('./routes/user');
 const apiRoutes = require('./routes/api');
 
-// NEW ROUTES - Added from our development
+// NEW ROUTES - Backend API
 const productsApiRoutes = require('./routes/products'); // Enhanced product API
 const cartRoutes = require('./routes/cart');             // Shopping cart
 const checkoutRoutes = require('./routes/checkout');     // Checkout process
@@ -57,6 +57,10 @@ const supportRoutes = require('./routes/support');       // Support tickets
 const uploadRoutes = require('./routes/upload');         // File upload
 const adminRoutes = require('./routes/admin');           // Admin panel
 
+// NEW ROUTES - Frontend Pages
+const frontendRoutes = require('./routes/frontend');     // Cart, Checkout, Support UI pages
+
+// --- Mount Routes ---
 // Main application routes
 app.use('/', indexRoutes);
 app.use('/auth', authRoutes);
@@ -64,7 +68,7 @@ app.use('/products', productRoutes);  // Frontend product routes
 app.use('/user', userRoutes);
 app.use('/api', apiRoutes);
 
-// New API routes
+// API routes
 app.use('/api/products', productsApiRoutes);  // Enhanced product API with vulnerabilities
 app.use('/api/cart', cartRoutes);             // Cart operations
 app.use('/api/checkout', checkoutRoutes);     // Checkout and orders
@@ -72,9 +76,8 @@ app.use('/api/support', supportRoutes);       // Support ticket system
 app.use('/api/upload', uploadRoutes);         // File upload endpoints
 app.use('/api/admin', adminRoutes);           // Admin panel endpoints
 
-// Alternative mounting (if you prefer /cart instead of /api/cart)
-app.use('/cart', cartRoutes);         
-app.use('/checkout', checkoutRoutes);
+// Frontend UI routes (cart page, checkout page, support page, etc.)
+app.use('/', frontendRoutes);
 
 // --- Health Check Endpoint ---
 app.get('/health', (req, res) => {
@@ -131,6 +134,13 @@ app.listen(PORT, () => {
     console.log(`[*] Default Credentials:`);
     console.log(`    Admin: admin / admin123`);
     console.log(`    User:  alice / alice123`);
+    console.log(``);
+    console.log(`[*] Quick Links:`);
+    console.log(`    Products: http://localhost:${PORT}/`);
+    console.log(`    Login: http://localhost:${PORT}/auth/login`);
+    console.log(`    Cart: http://localhost:${PORT}/cart`);
+    console.log(`    Support: http://localhost:${PORT}/support`);
+    console.log(`    Admin: http://localhost:${PORT}/admin`);
     console.log(``);
     console.log(`[*] Do NOT deploy in production!`);
     console.log(`[*] For educational purposes only.`);
