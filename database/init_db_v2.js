@@ -55,6 +55,9 @@ db.serialize(() => {
     users.forEach(u => userStmt.run(u));
     userStmt.finalize();
 
+    // ... rest of tables follow same pattern
+    // (Continuing with categories, products, etc.)
+
     // ========================================
     // 2. CATEGORIES TABLE
     // ========================================
@@ -125,40 +128,38 @@ db.serialize(() => {
 
     const products = [
         // Electronics
-        ['Flagship Phone X Pro', 'flagship-phone-x-pro', 'Latest flagship with AI-powered camera', 'The Flagship Phone X Pro features a stunning 6.7-inch OLED display, 12GB RAM, 512GB storage, and a revolutionary AI camera system. Perfect for tech enthusiasts.', 999.99, 1199.99, 650.00, 'PHONE-X-001', '1234567890123', 50, '/img/products/phone1.jpg', '/img/products/phone1.jpg,/img/products/phone1-2.jpg,/img/products/phone1-3.jpg', 7, 4, 'TechBrand', 0.2, '160x75x8mm', 4.5, 128, 1, 0, 'phone,flagship,5g,android', 'Buy Flagship Phone X Pro', 'Latest smartphone with AI camera', null, null],
-        ['Gaming Phone Ultra', 'gaming-phone-ultra', 'Ultimate gaming smartphone with 165Hz display', 'Designed for mobile gamers with a 165Hz AMOLED display, dedicated gaming triggers, and advanced cooling system. Dominate the competition.', 899.99, 999.99, 580.00, 'PHONE-G-001', '1234567890124', 35, '/img/products/phone2.jpg', '/img/products/phone2.jpg', 7, 4, 'GameTech', 0.23, '165x77x9mm', 4.7, 89, 1, 0, 'gaming,phone,165hz', 'Gaming Phone Ultra', 'Best gaming smartphone', null, null],
-        ['Developer Laptop Pro 16', 'developer-laptop-pro-16', '16-inch powerhouse for developers', 'MacBook-killer with 32GB RAM, 1TB NVMe SSD, RTX 4060, and a stunning 16-inch 2.5K display. Compiles code at lightning speed.', 1499.00, 1799.00, 980.00, 'LAPTOP-DEV-001', '1234567890125', 20, '/img/products/laptop1.jpg', '/img/products/laptop1.jpg', 8, 4, 'DevBook', 2.1, '357x248x18mm', 4.8, 256, 1, 0, 'laptop,developer,coding,linux', 'Developer Laptop Pro', 'Best laptop for developers', null, null],
-        ['Budget Office Laptop', 'budget-office-laptop', 'Affordable laptop for everyday tasks', 'Perfect for students and office work. 8GB RAM, 256GB SSD, Intel i5 processor. Great value for money.', 549.99, 699.99, 380.00, 'LAPTOP-OFF-001', '1234567890126', 60, '/img/products/laptop2.jpg', '/img/products/laptop2.jpg', 8, 4, 'OfficeMax', 1.8, '340x230x20mm', 4.2, 67, 0, 0, 'laptop,budget,office', 'Budget Laptop', 'Affordable office laptop', null, null],
+        ['Flagship Phone X Pro', 'flagship-phone-x-pro', 'Latest flagship with AI-powered camera', 'The Flagship Phone X Pro features a stunning 6.7-inch OLED display, 12GB RAM, 512GB storage, and a revolutionary AI camera system. Perfect for tech enthusiasts.', 999.99, 1199.99, 650.00, 'PHONE-X-001', '1234567890123', 50, '/img/products/phone1.jpg', '/img/products/phone1.jpg,/img/products/phone1-2.jpg,/img/products/phone1-3.jpg', 7, 4, 'TechBrand', 0.2, '160x75x8mm', 4.5, 128, 1, 0, 'phone,flagship,5g,android', 'Buy Flagship Phone X Pro', 'Latest smartphone with AI camera'],
+        ['Gaming Phone Ultra', 'gaming-phone-ultra', 'Ultimate gaming smartphone with 165Hz display', 'Designed for mobile gamers with a 165Hz AMOLED display, dedicated gaming triggers, and advanced cooling system. Dominate the competition.', 899.99, 999.99, 580.00, 'PHONE-G-001', '1234567890124', 35, '/img/products/phone2.jpg', '/img/products/phone2.jpg', 7, 4, 'GameTech', 0.23, '165x77x9mm', 4.7, 89, 1, 0, 'gaming,phone,165hz', 'Gaming Phone Ultra', 'Best gaming smartphone'],
+        ['Developer Laptop Pro 16', 'developer-laptop-pro-16', '16-inch powerhouse for developers', 'MacBook-killer with 32GB RAM, 1TB NVMe SSD, RTX 4060, and a stunning 16-inch 2.5K display. Compiles code at lightning speed.', 1499.00, 1799.00, 980.00, 'LAPTOP-DEV-001', '1234567890125', 20, '/img/products/laptop1.jpg', '/img/products/laptop1.jpg', 8, 4, 'DevBook', 2.1, '357x248x18mm', 4.8, 256, 1, 0, 'laptop,developer,coding,linux', 'Developer Laptop Pro', 'Best laptop for developers'],
+        ['Budget Office Laptop', 'budget-office-laptop', 'Affordable laptop for everyday tasks', 'Perfect for students and office work. 8GB RAM, 256GB SSD, Intel i5 processor. Great value for money.', 549.99, 699.99, 380.00, 'LAPTOP-OFF-001', '1234567890126', 60, '/img/products/laptop2.jpg', '/img/products/laptop2.jpg', 8, 4, 'OfficeMax', 1.8, '340x230x20mm', 4.2, 67, 0, 0, 'laptop,budget,office', 'Budget Laptop', 'Affordable office laptop'],
         
         // Fashion
-        ['Hacker Hoodie Black', 'hacker-hoodie-black', 'Anonymous style black hoodie', 'Premium quality hoodie for hackers and developers. Features a minimalist design with hidden pockets. Available in S-XXL.', 49.99, 69.99, 25.00, 'HOODIE-BLK-001', '1234567890127', 100, '/img/products/hoodie1.jpg', '/img/products/hoodie1.jpg', 9, null, 'HackWear', 0.5, 'S-XXL', 4.6, 342, 1, 0, 'hoodie,hacker,clothing,black', 'Hacker Hoodie', 'Anonymous hacker hoodie', null, null],
-        ['Cybersecurity T-Shirt', 'cybersecurity-tshirt', 'I broke production and all I got was this t-shirt', 'Funny developer t-shirt with cybersecurity humor. 100% cotton, comfortable fit.', 24.99, 29.99, 12.00, 'TSHIRT-001', '1234567890128', 150, '/img/products/tshirt1.jpg', '/img/products/tshirt1.jpg', 9, null, 'DevThreads', 0.2, 'S-XXL', 4.4, 89, 0, 0, 'tshirt,developer,funny', 'Cybersecurity T-Shirt', 'Funny developer tshirt', null, null],
+        ['Hacker Hoodie Black', 'hacker-hoodie-black', 'Anonymous style black hoodie', 'Premium quality hoodie for hackers and developers. Features a minimalist design with hidden pockets. Available in S-XXL.', 49.99, 69.99, 25.00, 'HOODIE-BLK-001', '1234567890127', 100, '/img/products/hoodie1.jpg', '/img/products/hoodie1.jpg', 9, null, 'HackWear', 0.5, 'S-XXL', 4.6, 342, 1, 0, 'hoodie,hacker,clothing,black', 'Hacker Hoodie', 'Anonymous hacker hoodie'],
+        ['Cybersecurity T-Shirt', 'cybersecurity-tshirt', 'I broke production and all I got was this t-shirt', 'Funny developer t-shirt with cybersecurity humor. 100% cotton, comfortable fit.', 24.99, 29.99, 12.00, 'TSHIRT-001', '1234567890128', 150, '/img/products/tshirt1.jpg', '/img/products/tshirt1.jpg', 9, null, 'DevThreads', 0.2, 'S-XXL', 4.4, 89, 0, 0, 'tshirt,developer,funny', 'Cybersecurity T-Shirt', 'Funny developer tshirt'],
         
         // Security Tools
-        ['USB Rubber Ducky', 'usb-rubber-ducky', 'Keystroke injection tool for penetration testing', 'The USB Rubber Ducky is a powerful keystroke injection tool disguised as a USB drive. Perfect for red team operations and security testing.', 45.00, 59.99, 28.00, 'USB-DUCKY-001', '1234567890129', 30, '/img/products/usb-ducky.jpg', '/img/products/usb-ducky.jpg', 6, 4, 'HakShop', 0.05, '60x20x10mm', 4.9, 445, 1, 0, 'pentest,usb,hacking,tool', 'USB Rubber Ducky', 'Keystroke injection tool', null, null],
-        ['WiFi Pineapple Mark VII', 'wifi-pineapple-mk7', 'Advanced WiFi auditing platform', 'The industry standard for WiFi penetration testing. Features dual-band AC, modular system, and intuitive web interface.', 199.99, 249.99, 120.00, 'WIFI-PINE-001', '1234567890130', 15, '/img/products/pineapple.jpg', '/img/products/pineapple.jpg', 6, 4, 'HakShop', 0.3, '100x100x30mm', 4.8, 234, 1, 0, 'wifi,pentest,auditing', 'WiFi Pineapple', 'WiFi auditing platform', null, null],
-        ['Flipper Zero', 'flipper-zero', 'Portable multi-tool for hackers', 'Portable multi-tool for pentesters and geeks. Sub-GHz transceiver, RFID, NFC, infrared, GPIO, and more.', 169.00, 199.00, 95.00, 'FLIP-ZERO-001', '1234567890131', 25, '/img/products/flipper.jpg', '/img/products/flipper.jpg', 6, 4, 'Flipper', 0.1, '100x40x25mm', 5.0, 678, 1, 0, 'hacking,rfid,nfc,pentest', 'Flipper Zero', 'Hacker multi-tool', null, null],
+        ['USB Rubber Ducky', 'usb-rubber-ducky', 'Keystroke injection tool for penetration testing', 'The USB Rubber Ducky is a powerful keystroke injection tool disguised as a USB drive. Perfect for red team operations and security testing.', 45.00, 59.99, 28.00, 'USB-DUCKY-001', '1234567890129', 30, '/img/products/usb-ducky.jpg', '/img/products/usb-ducky.jpg', 6, 4, 'HakShop', 0.05, '60x20x10mm', 4.9, 445, 1, 0, 'pentest,usb,hacking,tool', 'USB Rubber Ducky', 'Keystroke injection tool'],
+        ['WiFi Pineapple Mark VII', 'wifi-pineapple-mk7', 'Advanced WiFi auditing platform', 'The industry standard for WiFi penetration testing. Features dual-band AC, modular system, and intuitive web interface.', 199.99, 249.99, 120.00, 'WIFI-PINE-001', '1234567890130', 15, '/img/products/pineapple.jpg', '/img/products/pineapple.jpg', 6, 4, 'HakShop', 0.3, '100x100x30mm', 4.8, 234, 1, 0, 'wifi,pentest,auditing', 'WiFi Pineapple', 'WiFi auditing platform'],
+        ['Flipper Zero', 'flipper-zero', 'Portable multi-tool for hackers', 'Portable multi-tool for pentesters and geeks. Sub-GHz transceiver, RFID, NFC, infrared, GPIO, and more.', 169.00, 199.00, 95.00, 'FLIP-ZERO-001', '1234567890131', 25, '/img/products/flipper.jpg', '/img/products/flipper.jpg', 6, 4, 'Flipper', 0.1, '100x40x25mm', 5.0, 678, 1, 0, 'hacking,rfid,nfc,pentest', 'Flipper Zero', 'Hacker multi-tool'],
         
         // Books
-        ['The Web Application Hackers Handbook', 'web-app-hackers-handbook', 'Finding and exploiting security flaws', 'The definitive guide to web application security. Learn to find and exploit vulnerabilities in web applications.', 45.99, 59.99, 25.00, 'BOOK-WEB-001', '9780123456789', 40, '/img/products/book1.jpg', '/img/products/book1.jpg', 4, null, 'Wiley', 1.2, '230x180x35mm', 4.9, 567, 1, 0, 'book,hacking,security,web', 'Web Hackers Handbook', 'Web security book', null, null],
-        ['Metasploit: The Penetration Testers Guide', 'metasploit-guide', 'Master the Metasploit Framework', 'Comprehensive guide to using Metasploit for penetration testing. From basics to advanced exploitation.', 39.99, 49.99, 20.00, 'BOOK-META-001', '9780123456790', 35, '/img/products/book2.jpg', '/img/products/book2.jpg', 4, null, 'No Starch Press', 1.0, '230x180x30mm', 4.7, 234, 0, 0, 'book,metasploit,pentest', 'Metasploit Guide', 'Metasploit book', null, null],
+        ['The Web Application Hackers Handbook', 'web-app-hackers-handbook', 'Finding and exploiting security flaws', 'The definitive guide to web application security. Learn to find and exploit vulnerabilities in web applications.', 45.99, 59.99, 25.00, 'BOOK-WEB-001', '9780123456789', 40, '/img/products/book1.jpg', '/img/products/book1.jpg', 4, null, 'Wiley', 1.2, '230x180x35mm', 4.9, 567, 1, 0, 'book,hacking,security,web', 'Web Hackers Handbook', 'Web security book'],
+        ['Metasploit: The Penetration Testers Guide', 'metasploit-guide', 'Master the Metasploit Framework', 'Comprehensive guide to using Metasploit for penetration testing. From basics to advanced exploitation.', 39.99, 49.99, 20.00, 'BOOK-META-001', '9780123456790', 35, '/img/products/book2.jpg', '/img/products/book2.jpg', 4, null, 'No Starch Press', 1.0, '230x180x30mm', 4.7, 234, 0, 0, 'book,metasploit,pentest', 'Metasploit Guide', 'Metasploit book'],
         
         // Accessories
-        ['Mechanical Keyboard RGB', 'mechanical-keyboard-rgb', 'Cherry MX Blue switches with RGB lighting', 'Premium mechanical keyboard with Cherry MX Blue switches. RGB per-key lighting, programmable macros, and N-key rollover.', 129.99, 159.99, 70.00, 'KEYB-MECH-001', '1234567890132', 45, '/img/products/keyboard.jpg', '/img/products/keyboard.jpg', 1, null, 'KeyMaster', 1.2, '440x130x40mm', 4.6, 445, 1, 0, 'keyboard,mechanical,rgb,gaming', 'Mechanical Keyboard', 'RGB mechanical keyboard', null, null],
-        ['Wireless Mouse Pro', 'wireless-mouse-pro', 'Ergonomic wireless mouse with 16000 DPI', 'High-precision wireless mouse perfect for programmers and gamers. 16000 DPI sensor, 6 programmable buttons.', 59.99, 79.99, 35.00, 'MOUSE-PRO-001', '1234567890133', 70, '/img/products/mouse.jpg', '/img/products/mouse.jpg', 1, null, 'MouseTech', 0.1, '125x65x40mm', 4.5, 189, 0, 0, 'mouse,wireless,gaming', 'Wireless Mouse', 'Pro wireless mouse', null, null],
+        ['Mechanical Keyboard RGB', 'mechanical-keyboard-rgb', 'Cherry MX Blue switches with RGB lighting', 'Premium mechanical keyboard with Cherry MX Blue switches. RGB per-key lighting, programmable macros, and N-key rollover.', 129.99, 159.99, 70.00, 'KEYB-MECH-001', '1234567890132', 45, '/img/products/keyboard.jpg', '/img/products/keyboard.jpg', 1, null, 'KeyMaster', 1.2, '440x130x40mm', 4.6, 445, 1, 0, 'keyboard,mechanical,rgb,gaming', 'Mechanical Keyboard', 'RGB mechanical keyboard'],
+        ['Wireless Mouse Pro', 'wireless-mouse-pro', 'Ergonomic wireless mouse with 16000 DPI', 'High-precision wireless mouse perfect for programmers and gamers. 16000 DPI sensor, 6 programmable buttons.', 59.99, 79.99, 35.00, 'MOUSE-PRO-001', '1234567890133', 70, '/img/products/mouse.jpg', '/img/products/mouse.jpg', 1, null, 'MouseTech', 0.1, '125x65x40mm', 4.5, 189, 0, 0, 'mouse,wireless,gaming', 'Wireless Mouse', 'Pro wireless mouse'],
         
         // Hidden/Secret Product (for IDOR challenge)
-        ['SECRET FLAG PRODUCT', 'secret-flag-product', 'Hidden product with special flag', 'This product should not be visible! FLAG{idor_product_discovery_success}', 0.01, 0.01, 0.01, 'SECRET-001', '0000000000000', 1, '/img/products/secret.jpg', '/img/products/secret.jpg', 6, null, 'Hidden', 0, '0', 5.0, 1, 0, 1, 'secret,hidden,flag', 'Secret Product', 'Hidden flag product', null, null]
+        ['SECRET FLAG PRODUCT', 'secret-flag-product', 'Hidden product with special flag', 'This product should not be visible! FLAG{idor_product_discovery_success}', 0.01, 0.01, 0.01, 'SECRET-001', '0000000000000', 1, '/img/products/secret.jpg', '/img/products/secret.jpg', 6, null, 'Hidden', 0, '0', 5.0, 1, 0, 1, 'secret,hidden,flag', 'Secret Product', 'Hidden flag product']
     ];
 
-    const prodStmt = db.prepare(`INSERT INTO products (name, slug, description, long_description, price, compare_price, cost_price, sku, barcode, stock_quantity, image, images, category_id, vendor_id, brand, weight, dimensions, rating, review_count, is_featured, is_hidden, tags, meta_title, meta_description, created_at, updated_at) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`);
+    const prodStmt = db.prepare(`INSERT INTO products (name, slug, description, long_description, price, compare_price, cost_price, sku, barcode, stock_quantity, image, images, category_id, vendor_id, brand, weight, dimensions, rating, review_count, is_featured, is_hidden, tags, meta_title, meta_description) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     products.forEach(p => prodStmt.run(p));
     prodStmt.finalize();
 
-    // ========================================
-    // 4. ADDRESSES TABLE
-    // ========================================
+    // Remaining tables with fixed datetime usage
     db.run(`DROP TABLE IF EXISTS addresses`);
     db.run(`CREATE TABLE addresses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -188,9 +189,6 @@ db.serialize(() => {
     addresses.forEach(a => addrStmt.run(a));
     addrStmt.finalize();
 
-    // ========================================
-    // 5. COUPONS TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS coupons`);
     db.run(`CREATE TABLE coupons (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -203,27 +201,20 @@ db.serialize(() => {
         usage_limit INTEGER,
         used_count INTEGER DEFAULT 0,
         user_limit INTEGER DEFAULT 1,
-        valid_from DATETIME,
+        valid_from DATETIME DEFAULT CURRENT_TIMESTAMP,
         valid_until DATETIME,
         is_active INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    const coupons = [
-        ['WELCOME10', 'Welcome discount for new users', 'percentage', 10, 50, null, 100, 0, 1, datetime('now'), datetime('now', '+30 days'), 1],
-        ['SUMMER50', 'Summer sale - 50 off', 'fixed', 50, 200, null, 50, 0, 1, datetime('now'), datetime('now', '+60 days'), 1],
-        ['FREESHIP', 'Free shipping on all orders', 'shipping', 0, 0, null, null, 0, 1, datetime('now'), datetime('now', '+90 days'), 1],
-        ['ADMIN100', 'Admin only - 100% off', 'percentage', 100, 0, null, 10, 0, 1, datetime('now'), datetime('now', '+365 days'), 1],
-        ['FLAG_COUPON', 'FLAG{coupon_code_exploitation_success}', 'percentage', 99, 0, null, 1, 0, 1, datetime('now'), datetime('now', '+365 days'), 1]
-    ];
+    db.run(`INSERT INTO coupons (code, description, discount_type, discount_value, min_purchase, usage_limit, used_count, user_limit, valid_from, valid_until, is_active) VALUES 
+        ('WELCOME10', 'Welcome discount for new users', 'percentage', 10, 50, 100, 0, 1, datetime('now'), datetime('now', '+30 days'), 1),
+        ('SUMMER50', 'Summer sale - 50 off', 'fixed', 50, 200, 50, 0, 1, datetime('now'), datetime('now', '+60 days'), 1),
+        ('FREESHIP', 'Free shipping on all orders', 'shipping', 0, 0, null, 0, 1, datetime('now'), datetime('now', '+90 days'), 1),
+        ('ADMIN100', 'Admin only - 100% off', 'percentage', 100, 0, 10, 0, 1, datetime('now'), datetime('now', '+365 days'), 1),
+        ('FLAG_COUPON', 'FLAG{coupon_code_exploitation_success}', 'percentage', 99, 0, 1, 0, 1, datetime('now'), datetime('now', '+365 days'), 1)`);
 
-    const couponStmt = db.prepare("INSERT INTO coupons (code, description, discount_type, discount_value, min_purchase, max_discount, usage_limit, used_count, user_limit, valid_from, valid_until, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    coupons.forEach(c => couponStmt.run(c));
-    couponStmt.finalize();
-
-    // ========================================
-    // 6. ORDERS TABLE (Enhanced)
-    // ========================================
+    // Continue with remaining tables
     db.run(`DROP TABLE IF EXISTS orders`);
     db.run(`CREATE TABLE orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -244,9 +235,7 @@ db.serialize(() => {
         notes TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(shipping_address_id) REFERENCES addresses(id),
-        FOREIGN KEY(billing_address_id) REFERENCES addresses(id)
+        FOREIGN KEY(user_id) REFERENCES users(id)
     )`);
 
     const orders = [
@@ -259,9 +248,6 @@ db.serialize(() => {
     orders.forEach(o => orderStmt.run(o));
     orderStmt.finalize();
 
-    // ========================================
-    // 7. ORDER_ITEMS TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS order_items`);
     db.run(`CREATE TABLE order_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -287,9 +273,6 @@ db.serialize(() => {
     orderItems.forEach(oi => orderItemStmt.run(oi));
     orderItemStmt.finalize();
 
-    // ========================================
-    // 8. CART TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS cart`);
     db.run(`CREATE TABLE cart (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -301,19 +284,11 @@ db.serialize(() => {
         FOREIGN KEY(product_id) REFERENCES products(id)
     )`);
 
-    const cartItems = [
-        [2, 3, 1],
-        [3, 7, 1],
-        [5, 11, 2]
-    ];
-
+    const cartItems = [[2, 3, 1], [3, 7, 1], [5, 11, 2]];
     const cartStmt = db.prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
     cartItems.forEach(c => cartStmt.run(c));
     cartStmt.finalize();
 
-    // ========================================
-    // 9. WISHLIST TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS wishlist`);
     db.run(`CREATE TABLE wishlist (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -324,19 +299,11 @@ db.serialize(() => {
         FOREIGN KEY(product_id) REFERENCES products(id)
     )`);
 
-    const wishlistItems = [
-        [2, 8, datetime('now', '-5 days')],
-        [2, 9, datetime('now', '-3 days')],
-        [3, 1, datetime('now', '-1 day')]
-    ];
+    db.run(`INSERT INTO wishlist (user_id, product_id, added_at) VALUES 
+        (2, 8, datetime('now', '-5 days')),
+        (2, 9, datetime('now', '-3 days')),
+        (3, 1, datetime('now', '-1 day'))`);
 
-    const wishStmt = db.prepare("INSERT INTO wishlist (user_id, product_id, added_at) VALUES (?, ?, ?)");
-    wishlistItems.forEach(w => wishStmt.run(w));
-    wishStmt.finalize();
-
-    // ========================================
-    // 10. REVIEWS TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS reviews`);
     db.run(`CREATE TABLE reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -367,9 +334,6 @@ db.serialize(() => {
     reviews.forEach(r => reviewStmt.run(r));
     reviewStmt.finalize();
 
-    // ========================================
-    // 11. PAYMENT_METHODS TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS payment_methods`);
     db.run(`CREATE TABLE payment_methods (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -395,9 +359,6 @@ db.serialize(() => {
     paymentMethods.forEach(pm => pmStmt.run(pm));
     pmStmt.finalize();
 
-    // ========================================
-    // 12. SUPPORT_TICKETS TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS support_tickets`);
     db.run(`CREATE TABLE support_tickets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -410,8 +371,7 @@ db.serialize(() => {
         assigned_to INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id),
-        FOREIGN KEY(assigned_to) REFERENCES users(id)
+        FOREIGN KEY(user_id) REFERENCES users(id)
     )`);
 
     const tickets = [
@@ -424,9 +384,6 @@ db.serialize(() => {
     tickets.forEach(t => ticketStmt.run(t));
     ticketStmt.finalize();
 
-    // ========================================
-    // 13. TICKET_MESSAGES TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS ticket_messages`);
     db.run(`CREATE TABLE ticket_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -449,9 +406,6 @@ db.serialize(() => {
     ticketMessages.forEach(tm => tmStmt.run(tm));
     tmStmt.finalize();
 
-    // ========================================
-    // 14. SECRETS TABLE (CTF Flags)
-    // ========================================
     db.run(`DROP TABLE IF EXISTS secrets`);
     db.run(`CREATE TABLE secrets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -484,9 +438,6 @@ db.serialize(() => {
     secrets.forEach(s => secretStmt.run(s));
     secretStmt.finalize();
 
-    // ========================================
-    // 15. USER_PROGRESS TABLE (CTF Tracking)
-    // ========================================
     db.run(`DROP TABLE IF EXISTS user_progress`);
     db.run(`CREATE TABLE user_progress (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -496,9 +447,6 @@ db.serialize(() => {
         FOREIGN KEY(user_id) REFERENCES users(id)
     )`);
 
-    // ========================================
-    // 16. LOGS TABLE (For LFI vulnerability)
-    // ========================================
     db.run(`DROP TABLE IF EXISTS logs`);
     db.run(`CREATE TABLE logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -522,9 +470,6 @@ db.serialize(() => {
     logs.forEach(l => logStmt.run(l));
     logStmt.finalize();
 
-    // ========================================
-    // 17. SESSIONS TABLE
-    // ========================================
     db.run(`DROP TABLE IF EXISTS sessions`);
     db.run(`CREATE TABLE sessions (
         sid TEXT PRIMARY KEY,
@@ -534,8 +479,7 @@ db.serialize(() => {
 
     console.log('\n✓ Database schema created successfully!');
     console.log('✓ Seeded with realistic e-commerce data');
-    console.log('✓ Users created: 6 (admin, alice, bob, vendor1, charlie, testuser)');
-    console.log('✓ Products created: 15 (including 1 hidden product)');
+    console.log('✓ Users created: 6 (admin, alice, bob, vendor1, charlie, testuser)');    console.log('✓ Products created: 15 (including 1 hidden product)');
     console.log('✓ Categories created: 10');
     console.log('✓ Orders created: 3');
     console.log('✓ Reviews created: 7 (including XSS payload)');
