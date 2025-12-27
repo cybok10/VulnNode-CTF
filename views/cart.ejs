@@ -1,0 +1,271 @@
+<%- include('partials/header') %>
+
+<h1 class="text-primary mb-4">
+    <i class="fa-solid fa-shopping-cart"></i> Shopping Cart
+</h1>
+
+<!-- Cart Contents -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card bg-dark border-secondary mb-4">
+            <div class="card-body" id="cartItems">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Loading cart...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Coupon Code Section (SQL Injection Vulnerability) -->
+        <div class="card bg-dark border-secondary">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fa-solid fa-tag"></i> Apply Coupon Code</h5>
+            </div>
+            <div class="card-body">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="couponCode" placeholder="Enter coupon code">
+                    <button class="btn btn-success" onclick="applyCoupon()">
+                        <i class="fa-solid fa-check"></i> Apply
+                    </button>
+                </div>
+                <small class="text-muted">Try: SAVE10, SAVE20, SUMMER25</small>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Order Summary -->
+    <div class="col-lg-4">
+        <div class="card bg-dark border-secondary sticky-top" style="top: 20px;">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Order Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Subtotal:</span>
+                    <span id="subtotal">$0.00</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 text-success">
+                    <span>Discount:</span>
+                    <span id="discount">-$0.00</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Shipping:</span>
+                    <span id="shipping">$0.00</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Tax:</span>
+                    <span id="tax">$0.00</span>
+                </div>
+                <hr class="border-secondary">
+                <div class="d-flex justify-content-between h4 text-primary">
+                    <strong>Total:</strong>
+                    <strong id="total">$0.00</strong>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-success btn-lg" onclick="proceedToCheckout()">
+                        <i class="fa-solid fa-lock"></i> Proceed to Checkout
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="clearCart()">
+                        <i class="fa-solid fa-trash"></i> Clear Cart
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for Cart Management -->
+<script>
+let cartData = { items: [], subtotal: 0, discount: 0, shipping: 0, tax: 0, total: 0 };
+
+function loadCart() {
+    fetch('/api/cart')
+        .then(res => res.json())
+        .then(data => {
+            cartData = data;
+            displayCart(data);
+            updateSummary(data);
+        })
+        .catch(err => {
+            console.error('Failed to load cart:', err);
+            showEmptyCart();
+        });
+}
+
+function displayCart(data) {
+    const container = document.getElementById('cartItems');
+    
+    if (!data.items || data.items.length === 0) {
+        showEmptyCart();
+        return;
+    }
+    
+    let html = '<div class="table-responsive">';
+    html += '<table class="table table-dark table-hover">';
+    html += '<thead><tr><th>Product</th><th>Price</th><th>Quantity</th><th>Total</th><th>Actions</th></tr></thead>';
+    html += '<tbody>';
+    
+    data.items.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        html += `
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <img src="${item.image || '/img/products/default.jpg'}" width="50" class="rounded me-3" onerror="this.src='/img/products/default.jpg'">
+                        <div>
+                            <strong>${item.name}</strong><br>
+                            <small class="text-muted">Product ID: ${item.product_id}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>$${item.price.toFixed(2)}</td>
+                <td>
+                    <div class="input-group" style="width: 150px;">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="updateQuantity(${item.product_id}, ${item.quantity - 1})">
+                            <i class="fa-solid fa-minus"></i>
+                        </button>
+                        <input type="number" class="form-control form-control-sm text-center" value="${item.quantity}" 
+                               onchange="updateQuantity(${item.product_id}, this.value)" min="1">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="updateQuantity(${item.product_id}, ${item.quantity + 1})">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
+                </td>
+                <td><strong>$${itemTotal.toFixed(2)}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="removeItem(${item.product_id})">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function showEmptyCart() {
+    document.getElementById('cartItems').innerHTML = `
+        <div class="text-center py-5">
+            <i class="fa-solid fa-shopping-cart fa-4x text-muted mb-3"></i>
+            <h4>Your cart is empty</h4>
+            <p class="text-muted">Start shopping to add items to your cart</p>
+            <a href="/" class="btn btn-primary"><i class="fa-solid fa-shopping-bag"></i> Continue Shopping</a>
+        </div>
+    `;
+}
+
+function updateSummary(data) {
+    document.getElementById('subtotal').textContent = `$${(data.subtotal || 0).toFixed(2)}`;
+    document.getElementById('discount').textContent = `-$${(data.discount || 0).toFixed(2)}`;
+    document.getElementById('shipping').textContent = `$${(data.shipping || 0).toFixed(2)}`;
+    document.getElementById('tax').textContent = `$${(data.tax || 0).toFixed(2)}`;
+    document.getElementById('total').textContent = `$${(data.total || 0).toFixed(2)}`;
+}
+
+function updateQuantity(productId, quantity) {
+    quantity = parseInt(quantity);
+    if (quantity < 1) return;
+    
+    fetch('/api/cart/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: productId, quantity: quantity })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.message) {
+            loadCart();
+        }
+    });
+}
+
+function removeItem(productId) {
+    if (!confirm('Remove this item from cart?')) return;
+    
+    fetch('/api/cart/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: productId })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.message) {
+            loadCart();
+            showAlert('success', 'Item removed from cart');
+        }
+    });
+}
+
+function clearCart() {
+    if (!confirm('Clear entire cart?')) return;
+    
+    fetch('/api/cart/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.message) {
+            loadCart();
+            showAlert('success', 'Cart cleared');
+        }
+    });
+}
+
+function applyCoupon() {
+    const code = document.getElementById('couponCode').value;
+    if (!code) return;
+    
+    // VULNERABILITY: SQL Injection in coupon code
+    fetch('/api/cart/apply-coupon', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coupon_code: code })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.message) {
+            showAlert('success', data.message);
+            loadCart();
+        } else {
+            showAlert('danger', data.error || 'Invalid coupon code');
+        }
+    });
+}
+
+function proceedToCheckout() {
+    if (!cartData.items || cartData.items.length === 0) {
+        showAlert('warning', 'Your cart is empty');
+        return;
+    }
+    window.location.href = '/checkout';
+}
+
+function showAlert(type, message) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    const container = document.getElementById('alert-container');
+    if (container) {
+        container.innerHTML = alertHtml;
+        setTimeout(() => {
+            const alert = container.querySelector('.alert');
+            if (alert) alert.remove();
+        }, 3000);
+    }
+}
+
+// Load cart on page load
+document.addEventListener('DOMContentLoaded', loadCart);
+</script>
+
+<%- include('partials/footer') %>
