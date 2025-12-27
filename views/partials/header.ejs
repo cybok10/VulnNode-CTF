@@ -27,8 +27,7 @@
                     <!-- Cart for logged-in users -->
                     <li class="nav-item">
                         <a class="nav-link" href="/cart">
-                            <i class="fa-solid fa-shopping-cart"></i> Cart 
-                            <span class="badge bg-success" id="cart-count">0</span>
+                            <i class="fa-solid fa-shopping-cart"></i> Cart
                         </a>
                     </li>
                     
@@ -106,19 +105,3 @@
 </div>
 
 <div class="container min-vh-100">
-
-<!-- Cart Counter Script -->
-<% if (user) { %>
-<script>
-// Load cart count on page load
-fetch('/api/cart')
-    .then(res => res.json())
-    .then(data => {
-        if (data.items) {
-            const count = data.items.reduce((sum, item) => sum + item.quantity, 0);
-            document.getElementById('cart-count').textContent = count;
-        }
-    })
-    .catch(err => console.error('Cart load error:', err));
-</script>
-<% } %>

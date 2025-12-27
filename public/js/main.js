@@ -1,51 +1,58 @@
-// Wait for DOM to load
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("[*] VulnNode Client Scripts Loaded");
+// VulnNode Shop - Main JavaScript
 
-    // ============================================================
-    // VULNERABILITY: DOM-BASED XSS
-    // ============================================================
-    // We look for a hash parameter 'welcome' to display a personalized greeting.
-    // Exploitation: http://localhost:3000/#welcome=<img src=x onerror=alert(1)>
+// Show alert message
+function showAlert(type, message) {
+    const alertContainer = document.getElementById('alert-container');
+    if (!alertContainer) return;
     
-    function checkWelcomeMessage() {
-        const hash = decodeURIComponent(window.location.hash.substring(1)); // Remove '#'
-        const params = new URLSearchParams(hash);
-        
-        if (params.has('welcome')) {
-            const welcomeMsg = params.get('welcome');
-            const welcomeContainer = document.getElementById('welcome-message');
-            
-            if (welcomeContainer) {
-                // VULNERABILITY: using innerHTML with unsanitized input
-                welcomeContainer.innerHTML = `<div class="alert alert-success">Welcome back, ${welcomeMsg}!</div>`;
-            } else {
-                // Create container if it doesn't exist (e.g., on home page)
-                const container = document.createElement('div');
-                container.id = 'welcome-message';
-                container.className = 'container mt-3';
-                container.innerHTML = `<div class="alert alert-success">Welcome back, ${welcomeMsg}!</div>`;
-                
-                // Prepend to body or main container
-                const nav = document.querySelector('nav');
-                nav.parentNode.insertBefore(container, nav.nextSibling);
-            }
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    alertContainer.innerHTML = alertHtml;
+    
+    // Auto dismiss after 3 seconds
+    setTimeout(() => {
+        const alert = alertContainer.querySelector('.alert');
+        if (alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
         }
-    }
+    }, 3000);
+}
 
-    // Run on load and hash change
-    checkWelcomeMessage();
-    window.addEventListener('hashchange', checkWelcomeMessage);
-
-    // ============================================================
-    // UTILITY: Fake Chat Widget
-    // ============================================================
-    // Just for flavor, but could be a target for social engineering scenarios
-    const chatHeader = document.getElementById('chat-header');
-    if (chatHeader) {
-        chatHeader.addEventListener('click', () => {
-            const body = document.getElementById('chat-body');
-            body.style.display = body.style.display === 'none' ? 'block' : 'none';
+// Load cart count (only on pages with cart-count element)
+function loadCartCount() {
+    const cartCountElement = document.getElementById('cart-count');
+    if (!cartCountElement) return;
+    
+    fetch('/api/cart')
+        .then(res => {
+            if (!res.ok) throw new Error('Cart API failed');
+            return res.json();
+        })
+        .then(data => {
+            if (data.items && Array.isArray(data.items)) {
+                const count = data.items.reduce((sum, item) => sum + item.quantity, 0);
+                cartCountElement.textContent = count;
+            }
+        })
+        .catch(err => {
+            console.error('Cart load error:', err);
+            // Don't show error to user, just set to 0
+            cartCountElement.textContent = '0';
         });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Only load cart count if element exists
+    if (document.getElementById('cart-count')) {
+        loadCartCount();
     }
+    
+    console.log('VulnNode Shop loaded successfully');
 });
