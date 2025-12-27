@@ -1,19 +1,34 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../utils/db');
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('./database/vuln_app.db');
 
 router.get('/:id', (req, res) => {
     const id = req.params.id;
     
-    // Standard query
-    db.get("SELECT * FROM products WHERE id = ?", [id], (err, row) => {
-        if (err || !row) {
-            return res.render('partials/header', { user: req.session.user, title: 'Not Found' });
+    // Get product details
+    db.get("SELECT * FROM products WHERE id = ?", [id], (err, product) => {
+        if (err || !product) {
+            return res.status(404).render('partials/header', { 
+                user: req.session.user, 
+                title: 'Product Not Found' 
+            });
         }
-        res.render('product', { 
-            user: req.session.user, 
-            product: row, 
-            title: row.name 
+        
+        // Get reviews for this product (with XSS vulnerability)
+        db.all(`SELECT r.*, u.username 
+                FROM reviews r 
+                JOIN users u ON r.user_id = u.id 
+                WHERE r.product_id = ? 
+                ORDER BY r.created_at DESC`, 
+            [id], (err, reviews) => {
+            
+            res.render('product', { 
+                user: req.session.user, 
+                product: product,
+                reviews: reviews || [], // Pass reviews to template
+                title: product.name 
+            });
         });
     });
 });
