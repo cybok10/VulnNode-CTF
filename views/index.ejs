@@ -1,35 +1,212 @@
 <%- include('partials/header') %>
 
-<div class="p-5 mb-4 bg-dark border border-secondary rounded-3 text-center">
+<!-- Hero Section -->
+<div class="p-5 mb-4 bg-gradient rounded-3 text-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
     <div class="container-fluid py-5">
-        <h1 class="display-5 fw-bold text-primary">Welcome to VulnNode</h1>
-        <p class="col-md-8 fs-4 mx-auto text-muted">The safest place to buy developer tools and hacker gadgets. (Definitely not vulnerable).</p>
-        <a href="#products" class="btn btn-outline-primary btn-lg">Shop Now</a>
+        <h1 class="display-4 fw-bold text-white mb-3">
+            <i class="fa-solid fa-shield-halved"></i> VulnNode Shop
+        </h1>
+        <p class="col-md-8 fs-5 mx-auto text-white-50 mb-4">
+            The safest place to buy developer tools and hacker gadgets. (Definitely not vulnerable).
+        </p>
+        <div class="d-flex gap-3 justify-content-center">
+            <a href="#featured" class="btn btn-light btn-lg px-4">
+                <i class="fa-solid fa-fire"></i> Shop Deals
+            </a>
+            <a href="#products" class="btn btn-outline-light btn-lg px-4">
+                <i class="fa-solid fa-box-open"></i> All Products
+            </a>
+        </div>
     </div>
 </div>
 
-<div id="products" class="row row-cols-1 row-cols-md-3 g-4">
-    <% if (products.length > 0) { %>
-        <% products.forEach(function(product) { %>
-            <div class="col">
-                <div class="card h-100">
-                    <img src="<%= product.image %>" class="card-img-top p-3" alt="<%= product.name %>" style="height: 200px; object-fit: contain;">
-                    <div class="card-body border-top border-secondary">
-                        <h5 class="card-title"><%= product.name %></h5>
-                        <p class="card-text text-muted"><%= product.description %></p>
-                        <h4 class="text-white">$<%= product.price %></h4>
-                    </div>
-                    <div class="card-footer border-secondary bg-transparent d-grid">
-                        <a href="/products/<%= product.id %>" class="btn btn-primary">View Details</a>
+<!-- Categories Section -->
+<div class="mb-5">
+    <h3 class="mb-4"><i class="fa-solid fa-list"></i> Shop by Category</h3>
+    <div class="row g-3">
+        <div class="col-md-3">
+            <div class="card bg-dark border-primary text-center p-3 h-100">
+                <i class="fa-solid fa-laptop-code fa-3x text-primary mb-3"></i>
+                <h5>Electronics</h5>
+                <p class="text-muted small">Phones, Laptops & More</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-success text-center p-3 h-100">
+                <i class="fa-solid fa-shield-virus fa-3x text-success mb-3"></i>
+                <h5>Security Tools</h5>
+                <p class="text-muted small">Hacking Gadgets</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-warning text-center p-3 h-100">
+                <i class="fa-solid fa-tshirt fa-3x text-warning mb-3"></i>
+                <h5>Fashion</h5>
+                <p class="text-muted small">Hoodies & T-Shirts</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-info text-center p-3 h-100">
+                <i class="fa-solid fa-book fa-3x text-info mb-3"></i>
+                <h5>Books</h5>
+                <p class="text-muted small">Security & Programming</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Featured Products -->
+<div id="featured" class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="fa-solid fa-star text-warning"></i> Featured Products</h3>
+        <span class="badge bg-danger">HOT DEALS</span>
+    </div>
+    
+    <div class="row row-cols-1 row-cols-md-4 g-4">
+        <% if (products.length > 0) { %>
+            <% products.filter(p => p.is_featured).slice(0, 4).forEach(function(product) { %>
+                <div class="col">
+                    <div class="card bg-dark border-warning h-100 position-relative">
+                        <% if (product.compare_price && product.compare_price > product.price) { %>
+                            <span class="position-absolute top-0 end-0 badge bg-danger m-2">
+                                -<%= Math.round(((product.compare_price - product.price) / product.compare_price) * 100) %>%
+                            </span>
+                        <% } %>
+                        <img src="<%= product.image %>" class="card-img-top p-3" alt="<%= product.name %>" 
+                             style="height: 200px; object-fit: contain; background: #1a1a1a;" 
+                             onerror="this.src='/img/products/default.jpg'">
+                        <div class="card-body border-top border-warning">
+                            <h6 class="card-title text-truncate" title="<%= product.name %>"><%= product.name %></h6>
+                            <p class="card-text text-muted small" style="height: 40px; overflow: hidden;">
+                                <%= product.description %>
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <% if (product.compare_price && product.compare_price > product.price) { %>
+                                        <small class="text-muted text-decoration-line-through">$<%= product.compare_price.toFixed(2) %></small><br>
+                                    <% } %>
+                                    <h5 class="text-success mb-0">$<%= product.price.toFixed(2) %></h5>
+                                </div>
+                                <div class="text-end">
+                                    <small class="text-warning">
+                                        <% for(let i = 0; i < 5; i++) { %>
+                                            <i class="fa<%= i < product.rating ? 's' : 'r' %> fa-star"></i>
+                                        <% } %>
+                                    </small><br>
+                                    <small class="text-muted"><%= product.review_count || 0 %> reviews</small>
+                                </div>
+                            </div>
+                            <% if (product.stock_quantity > 0) { %>
+                                <small class="badge bg-success"><i class="fa-solid fa-check"></i> In Stock</small>
+                            <% } else { %>
+                                <small class="badge bg-danger"><i class="fa-solid fa-times"></i> Out of Stock</small>
+                            <% } %>
+                        </div>
+                        <div class="card-footer border-warning bg-transparent d-grid gap-2">
+                            <a href="/products/<%= product.id %>" class="btn btn-warning btn-sm">
+                                <i class="fa-solid fa-eye"></i> View Details
+                            </a>
+                        </div>
                     </div>
                 </div>
-            </div>
-        <% }); %>
-    <% } else { %>
-        <div class="col-12 text-center text-muted">
-            <h3>No products found.</h3>
+            <% }); %>
+        <% } %>
+    </div>
+</div>
+
+<!-- All Products -->
+<div id="products" class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="fa-solid fa-box-open"></i> All Products</h3>
+        <div>
+            <span class="text-muted"><%= products.length %> products available</span>
         </div>
-    <% } %>
+    </div>
+    
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        <% if (products.length > 0) { %>
+            <% products.forEach(function(product) { %>
+                <% if (!product.is_hidden) { %>
+                    <div class="col">
+                        <div class="card bg-dark border-secondary h-100">
+                            <img src="<%= product.image %>" class="card-img-top p-3" alt="<%= product.name %>" 
+                                 style="height: 220px; object-fit: contain; background: #1a1a1a;" 
+                                 onerror="this.src='/img/products/default.jpg'">
+                            <div class="card-body border-top border-secondary">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title mb-0" style="font-size: 1rem;"><%= product.name %></h5>
+                                    <% if (product.brand) { %>
+                                        <small class="badge bg-secondary"><%= product.brand %></small>
+                                    <% } %>
+                                </div>
+                                <p class="card-text text-muted small" style="height: 60px; overflow: hidden;">
+                                    <%= product.description %>
+                                </p>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div>
+                                        <% if (product.compare_price && product.compare_price > product.price) { %>
+                                            <small class="text-muted text-decoration-line-through d-block">$<%= product.compare_price.toFixed(2) %></small>
+                                        <% } %>
+                                        <h4 class="text-primary mb-0">$<%= product.price.toFixed(2) %></h4>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="text-warning">
+                                            <% for(let i = 0; i < 5; i++) { %>
+                                                <i class="fa<%= i < Math.round(product.rating) ? 's' : 'r' %> fa-star fa-sm"></i>
+                                            <% } %>
+                                        </div>
+                                        <small class="text-muted">(<%= product.review_count || 0 %>)</small>
+                                    </div>
+                                </div>
+                                <% if (product.stock_quantity <= 5 && product.stock_quantity > 0) { %>
+                                    <small class="badge bg-warning text-dark"><i class="fa-solid fa-exclamation-triangle"></i> Only <%= product.stock_quantity %> left!</small>
+                                <% } else if (product.stock_quantity > 0) { %>
+                                    <small class="badge bg-success"><i class="fa-solid fa-check-circle"></i> In Stock</small>
+                                <% } else { %>
+                                    <small class="badge bg-danger"><i class="fa-solid fa-times-circle"></i> Out of Stock</small>
+                                <% } %>
+                            </div>
+                            <div class="card-footer border-secondary bg-transparent d-grid gap-2">
+                                <a href="/products/<%= product.id %>" class="btn btn-primary">
+                                    <i class="fa-solid fa-info-circle"></i> View Details
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <% } %>
+            <% }); %>
+        <% } else { %>
+            <div class="col-12 text-center py-5">
+                <i class="fa-solid fa-box-open fa-4x text-muted mb-3"></i>
+                <h3 class="text-muted">No products found</h3>
+                <p class="text-muted">Try adjusting your search or browse all categories</p>
+            </div>
+        <% } %>
+    </div>
+</div>
+
+<!-- Trust Badges -->
+<div class="row text-center py-5 border-top border-secondary mt-5">
+    <div class="col-md-3">
+        <i class="fa-solid fa-shield-halved fa-3x text-success mb-3"></i>
+        <h6>Secure Payment</h6>
+        <small class="text-muted">100% Encrypted</small>
+    </div>
+    <div class="col-md-3">
+        <i class="fa-solid fa-truck-fast fa-3x text-primary mb-3"></i>
+        <h6>Fast Shipping</h6>
+        <small class="text-muted">2-3 Day Delivery</small>
+    </div>
+    <div class="col-md-3">
+        <i class="fa-solid fa-rotate-left fa-3x text-warning mb-3"></i>
+        <h6>Easy Returns</h6>
+        <small class="text-muted">30 Day Guarantee</small>
+    </div>
+    <div class="col-md-3">
+        <i class="fa-solid fa-headset fa-3x text-info mb-3"></i>
+        <h6>24/7 Support</h6>
+        <small class="text-muted">Always Here to Help</small>
+    </div>
 </div>
 
 <%- include('partials/footer') %>
