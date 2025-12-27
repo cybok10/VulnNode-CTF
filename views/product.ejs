@@ -1,28 +1,248 @@
 <%- include('partials/header') %>
 
-<div class="row align-items-center">
-    <div class="col-md-6">
-        <img src="<%= product.image %>" class="img-fluid rounded border border-secondary shadow" alt="<%= product.name %>">
+<div class="row">
+    <!-- Product Images -->
+    <div class="col-md-6 mb-4">
+        <img src="<%= product.image %>" class="img-fluid rounded border border-secondary shadow" alt="<%= product.name %>" onerror="this.src='/img/products/default.jpg'">
     </div>
-    <div class="col-md-6">
-        <h1 class="text-primary"><%= product.name %></h1>
-        <h3 class="text-white mb-4">$<%= product.price %></h3>
-        <p class="lead text-muted"><%= product.description %></p>
-        <hr class="border-secondary">
+    
+    <!-- Product Details -->
+    <div class="col-md-6 mb-4">
+        <h1 class="text-primary mb-3"><%= product.name %></h1>
+        <h2 class="text-success mb-4">$<%= product.price.toFixed(2) %></h2>
+        <p class="lead text-muted mb-4"><%= product.description %></p>
         
-        <form action="/products/buy" method="POST">
-            <input type="hidden" name="productId" value="<%= product.id %>">
-            
-            <div class="mb-3">
-                <label for="quantity" class="form-label">Quantity</label>
-                <input type="number" class="form-control form-control-lg" name="quantity" id="quantity" value="1" min="1">
+        <!-- Stock Status -->
+        <% if (product.stock > 0) { %>
+            <div class="alert alert-success mb-4">
+                <i class="fa-solid fa-check-circle"></i> <strong>In Stock:</strong> <%= product.stock %> units available
             </div>
-
-            <div class="d-grid">
-                <button type="submit" class="btn btn-primary btn-lg">Buy Now</button>
+        <% } else { %>
+            <div class="alert alert-danger mb-4">
+                <i class="fa-solid fa-times-circle"></i> <strong>Out of Stock</strong>
             </div>
-        </form>
+        <% } %>
+        
+        <hr class="border-secondary mb-4">
+        
+        <!-- Add to Cart Form -->
+        <% if (user && product.stock > 0) { %>
+            <div class="card bg-dark border-secondary mb-3">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="quantity" class="form-label">Quantity</label>
+                            <input type="number" class="form-control" id="quantity" value="1" min="1" max="<%= product.stock %>">
+                        </div>
+                        <div class="col-md-8 d-flex align-items-end">
+                            <button onclick="addToCart()" class="btn btn-success btn-lg w-100">
+                                <i class="fa-solid fa-cart-plus"></i> Add to Cart
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <% } else if (!user) { %>
+            <div class="alert alert-warning">
+                <i class="fa-solid fa-info-circle"></i> Please <a href="/auth/login" class="alert-link">login</a> to add items to cart
+            </div>
+        <% } %>
+        
+        <!-- Quick Buy Button -->
+        <% if (user && product.stock > 0) { %>
+            <div class="d-grid gap-2">
+                <button onclick="buyNow()" class="btn btn-primary btn-lg">
+                    <i class="fa-solid fa-bolt"></i> Buy Now
+                </button>
+            </div>
+        <% } %>
     </div>
 </div>
+
+<hr class="border-secondary my-5">
+
+<!-- Product Reviews Section (XSS VULNERABILITY) -->
+<div class="row">
+    <div class="col-12">
+        <h3 class="text-primary mb-4">
+            <i class="fa-solid fa-star"></i> Customer Reviews
+        </h3>
+        
+        <!-- Add Review Form (Stored XSS) -->
+        <% if (user) { %>
+            <div class="card bg-dark border-secondary mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Write a Review</h5>
+                </div>
+                <div class="card-body">
+                    <form id="reviewForm">
+                        <div class="mb-3">
+                            <label for="rating" class="form-label">Rating</label>
+                            <select class="form-select" id="rating" required>
+                                <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
+                                <option value="4">⭐⭐⭐⭐ 4 Stars</option>
+                                <option value="3">⭐⭐⭐ 3 Stars</option>
+                                <option value="2">⭐⭐ 2 Stars</option>
+                                <option value="1">⭐ 1 Star</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reviewTitle" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="reviewTitle" placeholder="Great product!" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reviewComment" class="form-label">Your Review</label>
+                            <textarea class="form-control" id="reviewComment" rows="4" placeholder="Share your experience..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa-solid fa-paper-plane"></i> Submit Review
+                        </button>
+                    </form>
+                </div>
+            </div>
+        <% } else { %>
+            <div class="alert alert-info mb-4">
+                <i class="fa-solid fa-info-circle"></i> Please <a href="/auth/login" class="alert-link">login</a> to write a review
+            </div>
+        <% } %>
+        
+        <!-- Reviews List (VULNERABILITY: XSS - Reviews are not sanitized) -->
+        <div id="reviewsList">
+            <% if (reviews && reviews.length > 0) { %>
+                <% reviews.forEach(function(review) { %>
+                    <div class="card bg-dark border-secondary mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong><%= review.username %></strong>
+                                <span class="text-warning ms-2">
+                                    <% for(let i = 0; i < review.rating; i++) { %>
+                                        ⭐
+                                    <% } %>
+                                </span>
+                            </div>
+                            <small class="text-muted"><%= new Date(review.created_at).toLocaleDateString() %></small>
+                        </div>
+                        <div class="card-body">
+                            <!-- VULNERABILITY: XSS - Review content is rendered unsanitized -->
+                            <h5 class="card-title"><%- review.title %></h5>
+                            <p class="card-text"><%- review.comment %></p>
+                        </div>
+                    </div>
+                <% }); %>
+            <% } else { %>
+                <div class="alert alert-secondary">
+                    <i class="fa-solid fa-comment-slash"></i> No reviews yet. Be the first to review this product!
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for Cart Functionality -->
+<script>
+function addToCart() {
+    const quantity = parseInt(document.getElementById('quantity').value);
+    const productId = <%= product.id %>;
+    
+    fetch('/api/cart/add', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            product_id: productId,
+            quantity: quantity
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.message) {
+            showAlert('success', data.message);
+            updateCartCount();
+        } else {
+            showAlert('danger', data.error || 'Failed to add to cart');
+        }
+    })
+    .catch(err => {
+        console.error('Cart error:', err);
+        showAlert('danger', 'Network error');
+    });
+}
+
+function buyNow() {
+    addToCart();
+    setTimeout(() => {
+        window.location.href = '/cart';
+    }, 500);
+}
+
+function updateCartCount() {
+    fetch('/api/cart')
+        .then(res => res.json())
+        .then(data => {
+            if (data.items) {
+                const count = data.items.reduce((sum, item) => sum + item.quantity, 0);
+                const badge = document.getElementById('cart-count');
+                if (badge) badge.textContent = count;
+            }
+        });
+}
+
+function showAlert(type, message) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    const container = document.getElementById('alert-container');
+    if (container) {
+        container.innerHTML = alertHtml;
+        setTimeout(() => {
+            const alert = container.querySelector('.alert');
+            if (alert) alert.remove();
+        }, 3000);
+    }
+}
+
+// Review Form Submission (XSS Vulnerability)
+document.addEventListener('DOMContentLoaded', function() {
+    const reviewForm = document.getElementById('reviewForm');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const rating = document.getElementById('rating').value;
+            const title = document.getElementById('reviewTitle').value;
+            const comment = document.getElementById('reviewComment').value;
+            
+            fetch('/api/products/<%= product.id %>/review', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    rating: rating,
+                    title: title,
+                    comment: comment
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.message) {
+                    showAlert('success', 'Review submitted! Refresh to see it.');
+                    reviewForm.reset();
+                } else {
+                    showAlert('danger', data.error || 'Failed to submit review');
+                }
+            })
+            .catch(err => {
+                console.error('Review error:', err);
+                showAlert('danger', 'Network error');
+            });
+        });
+    }
+});
+</script>
 
 <%- include('partials/footer') %>
