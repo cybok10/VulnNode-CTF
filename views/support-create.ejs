@@ -1,0 +1,94 @@
+<%- include('partials/header') %>
+
+<h1 class="text-primary mb-4">
+    <i class="fa-solid fa-plus-circle"></i> Create Support Ticket
+</h1>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card bg-dark border-secondary">
+            <div class="card-body">
+                <form id="ticketForm" onsubmit="submitTicket(event)">
+                    <!-- Subject -->
+                    <div class="mb-3">
+                        <label class="form-label">Subject *</label>
+                        <input type="text" class="form-control" id="subject" required maxlength="200">
+                    </div>
+                    
+                    <!-- Category -->
+                    <div class="mb-3">
+                        <label class="form-label">Category *</label>
+                        <select class="form-select" id="category" required>
+                            <option value="">Select category...</option>
+                            <option value="account">Account Issue</option>
+                            <option value="shipping">Shipping & Delivery</option>
+                            <option value="payment">Payment Problem</option>
+                            <option value="returns">Returns & Refunds</option>
+                            <option value="product">Product Question</option>
+                            <option value="technical">Technical Issue</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Priority -->
+                    <div class="mb-3">
+                        <label class="form-label">Priority *</label>
+                        <select class="form-select" id="priority" required>
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Message -->
+                    <div class="mb-3">
+                        <label class="form-label">Message * (Supports HTML)</label>
+                        <textarea class="form-control" id="message" rows="6" required></textarea>
+                        <small class="text-muted">Describe your issue in detail</small>
+                    </div>
+                    
+                    <!-- Buttons -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fa-solid fa-paper-plane"></i> Submit Ticket
+                        </button>
+                        <a href="/support" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function submitTicket(e) {
+    e.preventDefault();
+    
+    const data = {
+        subject: document.getElementById('subject').value,
+        category: document.getElementById('category').value,
+        priority: document.getElementById('priority').value,
+        message: document.getElementById('message').value
+    };
+    
+    fetch('/api/support/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(result => {
+        if (result.id) {
+            alert('Ticket created successfully!');
+            window.location.href = `/support/${result.id}`;
+        } else {
+            alert('Error: ' + (result.error || 'Failed to create ticket'));
+        }
+    })
+    .catch(err => {
+        alert('Failed to create ticket');
+    });
+}
+</script>
+
+<%- include('partials/footer') %>
