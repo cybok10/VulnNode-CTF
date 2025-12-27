@@ -1,166 +1,209 @@
-const db = require('../config/database');
-const crypto = require('crypto');
+// Authentication Middleware with Intentional Vulnerabilities
 
-// VULNERABILITY: Weak MD5 password comparison
-function md5(password) {
-    return crypto.createHash('md5').update(password).digest('hex');
-}
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('./database/vuln_app.db');
 
-// Authentication middleware
-const requireAuth = (req, res, next) => {
+// VULNERABILITY: Weak authentication check
+function isAuthenticated(req, res, next) {
+    // Check session
     if (req.session && req.session.user) {
         return next();
     }
     
-    // VULNERABILITY: Leaks information about authentication state
-    res.status(401).json({
-        error: 'Authentication required',
-        message: 'You must be logged in to access this resource',
-        loginUrl: '/auth/login',
-        requestedUrl: req.originalUrl,
-        sessionId: req.sessionID // Vulnerability: Session ID exposure
-    });
-};
+    // VULNERABILITY: Check for auth cookie (easily forgeable)
+    if (req.cookies.auth_token) {
+        // Insecure: trusting client-side cookie without verification
+        const userData = Buffer.from(req.cookies.auth_token, 'base64').toString();
+        try {
+            const user = JSON.parse(userData);
+            req.session.user = user;
+            return next();
+        } catch (e) {
+            // Fail silently
+        }
+    }
+    
+    // VULNERABILITY: Check for API key in headers (but accept any format)
+    if (req.headers['x-api-key']) {
+        db.get('SELECT * FROM users WHERE api_key = ?', [req.headers['x-api-key']], (err, user) => {
+            if (user) {
+                req.session.user = user;
+                return next();
+            }
+            return res.status(401).json({ error: 'Unauthorized' });
+        });
+        return;
+    }
+    
+    res.status(401).json({ error: 'Authentication required' });
+}
 
-// Admin authorization middleware
-const requireAdmin = (req, res, next) => {
+// VULNERABILITY: Weak admin check - only checks isAdmin flag
+function isAdmin(req, res, next) {
     if (!req.session || !req.session.user) {
         return res.status(401).json({ error: 'Authentication required' });
     }
     
-    // VULNERABILITY: Weak admin check - can be bypassed by modifying session
+    // VULNERABILITY: Only checking a boolean that can be manipulated
     if (req.session.user.isAdmin === 1 || req.session.user.isAdmin === '1' || req.session.user.isAdmin === true) {
         return next();
     }
     
-    // VULNERABILITY: Information disclosure in error message
-    res.status(403).json({
-        error: 'Forbidden',
-        message: 'Admin access required',
-        currentRole: req.session.user.isAdmin ? 'admin' : 'user',
-        userId: req.session.user.id,
-        requiredPermission: 'admin'
-    });
-};
+    // VULNERABILITY: Also accept if username is 'admin' (easily bypassable)
+    if (req.session.user.username === 'admin') {
+        return next();
+    }
+    
+    res.status(403).json({ error: 'Admin access required' });
+}
 
-// Vendor authorization middleware
-const requireVendor = (req, res, next) => {
+// VULNERABILITY: Vendor check with similar flaws
+function isVendor(req, res, next) {
     if (!req.session || !req.session.user) {
         return res.status(401).json({ error: 'Authentication required' });
     }
     
-    // VULNERABILITY: Can be bypassed by setting isVendor in session
-    if (req.session.user.isVendor === 1 || req.session.user.isAdmin === 1) {
+    if (req.session.user.isVendor === 1 || req.session.user.isVendor === true) {
         return next();
     }
     
     res.status(403).json({ error: 'Vendor access required' });
-};
+}
 
-// Optional authentication (doesn't block, just populates user)
-const optionalAuth = (req, res, next) => {
+// VULNERABILITY: Optional authentication - accepts request even if not authenticated
+function optionalAuth(req, res, next) {
     if (req.session && req.session.user) {
-        req.user = req.session.user;
+        // User is authenticated
+        return next();
     }
+    
+    // VULNERABILITY: Check cookie without proper validation
+    if (req.cookies.user_id) {
+        // Insecure: fetch user by ID from cookie
+        db.get('SELECT * FROM users WHERE id = ?', [req.cookies.user_id], (err, user) => {
+            if (user) {
+                req.session.user = user;
+            }
+            return next();
+        });
+        return;
+    }
+    
+    // Continue without authentication
     next();
-};
+}
 
-// VULNERABILITY: Weak API key validation
-const validateApiKey = (req, res, next) => {
-    const apiKey = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
-    
-    if (!apiKey) {
-        return res.status(401).json({ error: 'API key required' });
-    }
-    
-    // VULNERABILITY: SQL injection in API key lookup
-    const query = `SELECT * FROM users WHERE api_key = '${apiKey}'`;
-    
-    db.get(query, (err, user) => {
-        if (err) {
-            // VULNERABILITY: Exposes SQL error
-            return res.status(500).json({ 
-                error: 'Database error', 
-                details: err.message,
-                query: query 
+// VULNERABILITY: Rate limiting that can be easily bypassed
+const rateLimitStore = {};
+
+function rateLimit(maxRequests = 100, windowMs = 60000) {
+    return (req, res, next) => {
+        // VULNERABILITY: Using IP which can be spoofed via X-Forwarded-For
+        const identifier = req.headers['x-forwarded-for'] || req.ip || req.connection.remoteAddress;
+        
+        const now = Date.now();
+        
+        if (!rateLimitStore[identifier]) {
+            rateLimitStore[identifier] = {
+                count: 1,
+                resetTime: now + windowMs
+            };
+            return next();
+        }
+        
+        if (now > rateLimitStore[identifier].resetTime) {
+            rateLimitStore[identifier] = {
+                count: 1,
+                resetTime: now + windowMs
+            };
+            return next();
+        }
+        
+        rateLimitStore[identifier].count++;
+        
+        // VULNERABILITY: Easy to bypass, no permanent blocking
+        if (rateLimitStore[identifier].count > maxRequests) {
+            return res.status(429).json({ 
+                error: 'Too many requests',
+                message: 'Please try again later',
+                // VULNERABILITY: Exposing internal details
+                resetTime: rateLimitStore[identifier].resetTime,
+                currentCount: rateLimitStore[identifier].count
             });
         }
         
-        if (!user) {
-            return res.status(401).json({ 
-                error: 'Invalid API key',
-                providedKey: apiKey // VULNERABILITY: Echoes back the key
-            });
-        }
-        
-        req.apiUser = user;
         next();
-    });
-};
-
-// VULNERABILITY: Timing attack vulnerable password check
-const checkPassword = (storedHash, providedPassword) => {
-    const providedHash = md5(providedPassword);
-    
-    // VULNERABILITY: String comparison vulnerable to timing attacks
-    // Should use crypto.timingSafeEqual
-    return storedHash === providedHash;
-};
-
-// VULNERABILITY: Session fixation - doesn't regenerate session on login
-const createSession = (req, user) => {
-    // Should call req.session.regenerate() but doesn't
-    req.session.user = {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        isAdmin: user.isAdmin,
-        isVendor: user.isVendor,
-        avatar: user.avatar,
-        balance: user.balance,
-        loyalty_points: user.loyalty_points
     };
-    
-    // VULNERABILITY: Stores sensitive data in session
-    req.session.apiKey = user.api_key;
-    
-    return req.session;
-};
+}
 
-// VULNERABILITY: No brute force protection
-const loginAttemptTracker = {};
-
-const checkLoginAttempts = (username) => {
-    // Intentionally broken - doesn't actually limit attempts
-    if (!loginAttemptTracker[username]) {
-        loginAttemptTracker[username] = { attempts: 0, lastAttempt: Date.now() };
+// VULNERABILITY: CSRF protection that can be bypassed
+function csrfProtection(req, res, next) {
+    // Only check for state-changing methods
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
+        const token = req.body.csrf_token || req.headers['x-csrf-token'];
+        const sessionToken = req.session.csrfToken;
+        
+        // VULNERABILITY: Weak token generation and validation
+        if (!token || !sessionToken) {
+            // VULNERABILITY: Accept requests from same origin without token
+            if (req.headers.referer && req.headers.referer.includes(req.headers.host)) {
+                return next();
+            }
+            return res.status(403).json({ error: 'CSRF token missing' });
+        }
+        
+        // VULNERABILITY: Simple string comparison (no timing-safe comparison)
+        if (token === sessionToken) {
+            return next();
+        }
+        
+        return res.status(403).json({ error: 'Invalid CSRF token' });
     }
     
-    const tracker = loginAttemptTracker[username];
-    tracker.attempts++;
-    tracker.lastAttempt = Date.now();
-    
-    // VULNERABILITY: Never actually blocks, just logs
-    if (tracker.attempts > 100) {
-        console.log(`Warning: ${username} has ${tracker.attempts} failed login attempts`);
+    next();
+}
+
+// Generate CSRF token (weak)
+function generateCSRFToken(req, res, next) {
+    // VULNERABILITY: Predictable token generation
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = Buffer.from(Date.now().toString()).toString('base64');
+    }
+    res.locals.csrfToken = req.session.csrfToken;
+    next();
+}
+
+// VULNERABILITY: Session validation with flaws
+function validateSession(req, res, next) {
+    if (req.session && req.session.user) {
+        // VULNERABILITY: No session expiry check
+        // VULNERABILITY: No session rotation
+        // VULNERABILITY: No concurrent session check
+        
+        // Check if user still exists (at least doing something)
+        db.get('SELECT * FROM users WHERE id = ?', [req.session.user.id], (err, user) => {
+            if (err || !user) {
+                req.session.destroy();
+                return res.status(401).json({ error: 'Session invalid' });
+            }
+            
+            // VULNERABILITY: Updating session with fresh data (could be manipulated)
+            req.session.user = user;
+            next();
+        });
+        return;
     }
     
-    return true; // Always allows attempt
-};
-
-const resetLoginAttempts = (username) => {
-    delete loginAttemptTracker[username];
-};
+    next();
+}
 
 module.exports = {
-    requireAuth,
-    requireAdmin,
-    requireVendor,
+    isAuthenticated,
+    isAdmin,
+    isVendor,
     optionalAuth,
-    validateApiKey,
-    checkPassword,
-    createSession,
-    checkLoginAttempts,
-    resetLoginAttempts,
-    md5
+    rateLimit,
+    csrfProtection,
+    generateCSRFToken,
+    validateSession
 };
