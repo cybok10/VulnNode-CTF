@@ -1,443 +1,393 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./database/vuln_app.db');
-const { isAuthenticated, isAdmin } = require('../middleware/auth');
+const db = require('../database/db');
+const { isAuthenticated } = require('../middleware/auth');
 
-// Get All User Tickets
+// ============================================================
+// SUPPORT TICKET API ROUTES
+// ============================================================
+// Support system with XSS, IDOR, and SQL Injection vulnerabilities
+
+// --- CREATE NEW SUPPORT TICKET ---
+router.post('/create', isAuthenticated, (req, res) => {
+    try {
+        const { subject, message, priority } = req.body;
+
+        // VULNERABILITY: No input sanitization - Stored XSS
+        // User can inject JavaScript in subject/message
+        if (!subject || !message) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Subject and message are required' 
+            });
+        }
+
+        // Generate ticket number
+        const ticketNumber = `TKT-${Date.now()}-${Math.random().toString(36).substring(7).toUpperCase()}`;
+
+        // Insert ticket (no sanitization)
+        const result = db.prepare(`
+            INSERT INTO support_tickets (user_id, ticket_number, subject, message, priority, status)
+            VALUES (?, ?, ?, ?, ?, 'open')
+        `).run(req.user.id, ticketNumber, subject, message, priority || 'medium');
+
+        // Log ticket creation
+        db.prepare(`
+            INSERT INTO logs (user_id, action, details)
+            VALUES (?, 'ticket_created', ?)
+        `).run(req.user.id, `Ticket ${ticketNumber} created`);
+
+        res.json({
+            success: true,
+            message: 'Support ticket created successfully',
+            ticketId: result.lastInsertRowid,
+            ticketNumber: ticketNumber
+        });
+    } catch (error) {
+        console.error('Create ticket error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Unable to create ticket',
+            error: error.message, // VULNERABILITY: Error disclosure
+            stack: error.stack     // VULNERABILITY: Stack trace exposure
+        });
+    }
+});
+
+// --- GET ALL TICKETS (USER) ---
 router.get('/tickets', isAuthenticated, (req, res) => {
-    const userId = req.session.user.id;
-    
-    db.all(`
-        SELECT * FROM support_tickets 
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-    `, [userId], (err, tickets) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        res.json({ tickets: tickets });
-    });
+    try {
+        const tickets = db.prepare(`
+            SELECT * FROM support_tickets 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC
+        `).all(req.user.id);
+
+        res.json({
+            success: true,
+            tickets: tickets
+        });
+    } catch (error) {
+        console.error('Get tickets error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
 });
 
-// Get Single Ticket - IDOR VULNERABILITY
-router.get('/tickets/:ticket_id', isAuthenticated, (req, res) => {
-    const { ticket_id } = req.params;
-    
-    // VULNERABILITY: No ownership check
-    // Any authenticated user can view any ticket
-    
-    db.get('SELECT * FROM support_tickets WHERE id = ?', [ticket_id], (err, ticket) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
+// --- GET SINGLE TICKET ---
+router.get('/ticket/:id', isAuthenticated, (req, res) => {
+    try {
+        const ticketId = req.params.id;
+
+        // VULNERABILITY: IDOR - No ownership validation
+        // User can view any ticket by changing the ID
+        const ticket = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(ticketId);
+
         if (!ticket) {
-            return res.status(404).json({ error: 'Ticket not found' });
-        }
-        
-        // Get ticket messages
-        db.all(`
-            SELECT tm.*, u.username, u.avatar, u.isAdmin
-            FROM ticket_messages tm
-            JOIN users u ON tm.user_id = u.id
-            WHERE tm.ticket_id = ?
-            ORDER BY tm.created_at ASC
-        `, [ticket_id], (err, messages) => {
-            // VULNERABILITY: Exposing other users' tickets and messages
-            res.json({
-                ticket: ticket,
-                messages: messages || []
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Ticket not found' 
             });
-        });
-    });
-});
-
-// Create New Ticket - STORED XSS
-router.post('/tickets', isAuthenticated, (req, res) => {
-    const { subject, message, category, priority } = req.body;
-    const userId = req.session.user.id;
-    
-    // VULNERABILITY: No input sanitization - Stored XSS
-    // subject and message stored without filtering
-    
-    if (!subject || !message) {
-        return res.status(400).json({ error: 'Subject and message are required' });
-    }
-    
-    // VULNERABILITY: User can set own priority (should be auto-assigned)
-    const ticketPriority = priority || 'normal';
-    
-    db.run(`
-        INSERT INTO support_tickets (
-            user_id, subject, message, status, priority, category
-        ) VALUES (?, ?, ?, 'open', ?, ?)
-    `, [userId, subject, message, ticketPriority, category], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
         }
-        
+
+        // Get messages
+        const messages = db.prepare(`
+            SELECT * FROM ticket_messages 
+            WHERE ticket_id = ? 
+            ORDER BY created_at ASC
+        `).all(ticketId);
+
         res.json({
-            message: 'Ticket created successfully',
-            ticket_id: this.lastID,
-            warning: 'Message may contain unfiltered HTML/JavaScript!'
+            success: true,
+            ticket: ticket,
+            messages: messages
         });
-    });
+    } catch (error) {
+        console.error('Get ticket error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
 });
 
-// Reply to Ticket - STORED XSS
-router.post('/tickets/:ticket_id/reply', isAuthenticated, (req, res) => {
-    const { ticket_id } = req.params;
-    const { message } = req.body;
-    const userId = req.session.user.id;
-    
-    if (!message) {
-        return res.status(400).json({ error: 'Message is required' });
-    }
-    
-    // VULNERABILITY: No ownership check on ticket
-    // Anyone can reply to any ticket
-    
-    // VULNERABILITY: No input sanitization - Stored XSS
-    db.run(`
-        INSERT INTO ticket_messages (ticket_id, user_id, message, is_staff_reply)
-        VALUES (?, ?, ?, 0)
-    `, [ticket_id, userId, message], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+// --- ADD MESSAGE TO TICKET ---
+router.post('/ticket/:id/message', isAuthenticated, (req, res) => {
+    try {
+        const ticketId = req.params.id;
+        const { message } = req.body;
+
+        if (!message) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Message is required' 
+            });
         }
-        
-        // Update ticket status to 'open' if it was closed
-        db.run(`
-            UPDATE support_tickets 
-            SET status = 'open', updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `, [ticket_id]);
-        
+
+        // VULNERABILITY: IDOR - No ownership check on ticket
+        // User can add messages to other users' tickets
+        const ticket = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(ticketId);
+
+        if (!ticket) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Ticket not found' 
+            });
+        }
+
+        // VULNERABILITY: Stored XSS - No message sanitization
+        db.prepare(`
+            INSERT INTO ticket_messages (ticket_id, user_id, message, is_admin)
+            VALUES (?, ?, ?, 0)
+        `).run(ticketId, req.user.id, message);
+
+        // Update ticket updated_at
+        db.prepare('UPDATE support_tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ticketId);
+
         res.json({
-            message: 'Reply added',
-            message_id: this.lastID
+            success: true,
+            message: 'Message added successfully'
         });
-    });
-});
-
-// Update Ticket Status
-router.put('/tickets/:ticket_id/status', isAuthenticated, (req, res) => {
-    const { ticket_id } = req.params;
-    const { status, state_reason } = req.body;
-    
-    // VULNERABILITY: No ownership check
-    // Any user can close/reopen any ticket
-    
-    const validStatuses = ['open', 'closed', 'pending'];
-    if (!validStatuses.includes(status)) {
-        return res.status(400).json({ error: 'Invalid status' });
-    }
-    
-    db.run(`
-        UPDATE support_tickets 
-        SET status = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `, [status, ticket_id], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Ticket not found' });
-        }
-        
-        res.json({ message: 'Ticket status updated' });
-    });
-});
-
-// Admin: Get All Tickets
-router.get('/admin/tickets', isAdmin, (req, res) => {
-    const { status, priority, assigned_to, page = 1, limit = 20 } = req.query;
-    
-    let query = 'SELECT t.*, u.username, u.email FROM support_tickets t JOIN users u ON t.user_id = u.id WHERE 1=1';
-    const params = [];
-    
-    if (status) {
-        query += ' AND t.status = ?';
-        params.push(status);
-    }
-    
-    if (priority) {
-        query += ' AND t.priority = ?';
-        params.push(priority);
-    }
-    
-    if (assigned_to) {
-        query += ' AND t.assigned_to = ?';
-        params.push(assigned_to);
-    }
-    
-    query += ' ORDER BY t.created_at DESC LIMIT ? OFFSET ?';
-    const offset = (page - 1) * limit;
-    params.push(parseInt(limit), offset);
-    
-    db.all(query, params, (err, tickets) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        // VULNERABILITY: Exposing user PII (email)
-        res.json({ tickets: tickets });
-    });
-});
-
-// Admin: Assign Ticket
-router.put('/admin/tickets/:ticket_id/assign', isAdmin, (req, res) => {
-    const { ticket_id } = req.params;
-    const { assigned_to } = req.body;
-    
-    // VULNERABILITY: No validation if assigned_to is actually an admin
-    
-    db.run(`
-        UPDATE support_tickets 
-        SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `, [assigned_to, ticket_id], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        res.json({ message: 'Ticket assigned' });
-    });
-});
-
-// Admin: Reply to Ticket
-router.post('/admin/tickets/:ticket_id/reply', isAdmin, (req, res) => {
-    const { ticket_id } = req.params;
-    const { message } = req.body;
-    const adminId = req.session.user.id;
-    
-    // VULNERABILITY: Stored XSS even in admin replies
-    db.run(`
-        INSERT INTO ticket_messages (ticket_id, user_id, message, is_staff_reply)
-        VALUES (?, ?, ?, 1)
-    `, [ticket_id, adminId, message], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        // Auto-update ticket status
-        db.run(`
-            UPDATE support_tickets 
-            SET status = 'pending', updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `, [ticket_id]);
-        
-        res.json({
-            message: 'Admin reply sent',
-            message_id: this.lastID
+    } catch (error) {
+        console.error('Add message error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
         });
-    });
+    }
 });
 
-// Search Tickets - SQL INJECTION
+// --- SEARCH TICKETS (SQL Injection Vulnerable) ---
 router.get('/search', isAuthenticated, (req, res) => {
-    const { q, status } = req.query;
-    const userId = req.session.user.id;
-    
-    if (!q) {
-        return res.status(400).json({ error: 'Search query required' });
-    }
-    
-    // VULNERABILITY: SQL Injection in search query
-    let query = `
-        SELECT * FROM support_tickets 
-        WHERE user_id = ${userId} 
-        AND (subject LIKE '%${q}%' OR message LIKE '%${q}%')
-    `;
-    
-    if (status) {
-        query += ` AND status = '${status}'`;
-    }
-    
-    query += ' ORDER BY created_at DESC';
-    
-    db.all(query, (err, tickets) => {
-        if (err) {
-            // VULNERABILITY: Exposing SQL errors
-            return res.status(500).json({ 
-                error: err.message,
-                query: query
+    try {
+        const { query } = req.query;
+
+        if (!query) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Search query is required' 
             });
         }
-        
-        res.json({ tickets: tickets });
-    });
-});
 
-// Get Ticket Statistics
-router.get('/stats', isAuthenticated, (req, res) => {
-    const userId = req.session.user.id;
-    
-    db.all(`
-        SELECT 
-            status,
-            COUNT(*) as count
-        FROM support_tickets
-        WHERE user_id = ?
-        GROUP BY status
-    `, [userId], (err, stats) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        res.json({ statistics: stats });
-    });
-});
+        // VULNERABILITY: SQL Injection
+        // Direct string concatenation without parameterization
+        const sql = `
+            SELECT * FROM support_tickets 
+            WHERE user_id = ${req.user.id} 
+            AND (subject LIKE '%${query}%' OR message LIKE '%${query}%')
+            ORDER BY created_at DESC
+        `;
 
-// Admin: Get Ticket Statistics
-router.get('/admin/stats', isAdmin, (req, res) => {
-    db.all(`
-        SELECT 
-            status,
-            priority,
-            COUNT(*) as count
-        FROM support_tickets
-        GROUP BY status, priority
-    `, (err, stats) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        res.json({ statistics: stats });
-    });
-});
+        const tickets = db.prepare(sql).all();
 
-// VULNERABILITY: Delete Ticket (IDOR)
-router.delete('/tickets/:ticket_id', isAuthenticated, (req, res) => {
-    const { ticket_id } = req.params;
-    
-    // VULNERABILITY: No ownership check
-    // Any user can delete any ticket
-    
-    db.run('DELETE FROM support_tickets WHERE id = ?', [ticket_id], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Ticket not found' });
-        }
-        
-        // Delete associated messages
-        db.run('DELETE FROM ticket_messages WHERE ticket_id = ?', [ticket_id]);
-        
-        res.json({ message: 'Ticket deleted' });
-    });
-});
-
-// VULNERABILITY: Export Tickets (Information Disclosure)
-router.get('/export', isAuthenticated, (req, res) => {
-    const userId = req.session.user.id;
-    
-    db.all(`
-        SELECT t.*, u.username, u.email, u.phone
-        FROM support_tickets t
-        JOIN users u ON t.user_id = u.id
-        WHERE t.user_id = ?
-    `, [userId], (err, tickets) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
-        // VULNERABILITY: Exposing PII in export
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', 'attachment; filename=tickets.json');
         res.json({
+            success: true,
             tickets: tickets,
-            exported_at: new Date().toISOString(),
-            user_info: req.session.user // Exposing session data
+            query: query
         });
-    });
+    } catch (error) {
+        console.error('Search tickets error:', error);
+        // VULNERABILITY: Detailed SQL error exposure
+        res.status(500).json({ 
+            success: false, 
+            message: 'Search failed',
+            error: error.message,
+            query: req.query.query,
+            sqlError: error.code // Exposes SQL error codes
+        });
+    }
 });
 
-// VULNERABILITY: Ticket ID Enumeration
-router.get('/check/:ticket_id', (req, res) => {
-    const { ticket_id } = req.params;
-    
-    // VULNERABILITY: No authentication required
-    // Can enumerate valid ticket IDs
-    
-    db.get('SELECT id, status FROM support_tickets WHERE id = ?', [ticket_id], (err, ticket) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        
+// --- CLOSE TICKET ---
+router.post('/ticket/:id/close', isAuthenticated, (req, res) => {
+    try {
+        const ticketId = req.params.id;
+
+        // VULNERABILITY: IDOR - Can close other users' tickets
+        const ticket = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(ticketId);
+
         if (!ticket) {
-            return res.json({ exists: false });
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Ticket not found' 
+            });
         }
-        
-        // VULNERABILITY: Leaking ticket existence and status
+
+        db.prepare('UPDATE support_tickets SET status = ? WHERE id = ?').run('closed', ticketId);
+
         res.json({
-            exists: true,
-            status: ticket.status,
-            ticket_id: ticket.id
+            success: true,
+            message: 'Ticket closed successfully'
         });
-    });
+    } catch (error) {
+        console.error('Close ticket error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
 });
 
-// Upload Ticket Attachment (placeholder for file upload vuln)
-router.post('/tickets/:ticket_id/attach', isAuthenticated, (req, res) => {
-    // This will be implemented with file upload vulnerabilities
-    res.json({ 
-        message: 'File upload endpoint',
-        note: 'Will be implemented with unrestricted file upload vulnerability'
-    });
+// --- UPDATE TICKET PRIORITY ---
+router.post('/ticket/:id/priority', isAuthenticated, (req, res) => {
+    try {
+        const ticketId = req.params.id;
+        const { priority } = req.body;
+
+        if (!['low', 'medium', 'high', 'urgent'].includes(priority)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Invalid priority value' 
+            });
+        }
+
+        // VULNERABILITY: IDOR - Can change priority of any ticket
+        db.prepare('UPDATE support_tickets SET priority = ? WHERE id = ?').run(priority, ticketId);
+
+        res.json({
+            success: true,
+            message: 'Priority updated successfully'
+        });
+    } catch (error) {
+        console.error('Update priority error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
 });
 
-// Admin: Bulk Update Tickets
-router.post('/admin/bulk-update', isAdmin, (req, res) => {
-    const { ticket_ids, status, priority, assigned_to } = req.body;
-    
-    if (!ticket_ids || !Array.isArray(ticket_ids)) {
-        return res.status(400).json({ error: 'ticket_ids array required' });
-    }
-    
-    // VULNERABILITY: No validation on ticket_ids
-    // Can manipulate any tickets
-    
-    const updates = [];
-    const params = [];
-    
-    if (status) {
-        updates.push('status = ?');
-        params.push(status);
-    }
-    
-    if (priority) {
-        updates.push('priority = ?');
-        params.push(priority);
-    }
-    
-    if (assigned_to) {
-        updates.push('assigned_to = ?');
-        params.push(assigned_to);
-    }
-    
-    if (updates.length === 0) {
-        return res.status(400).json({ error: 'No updates specified' });
-    }
-    
-    const placeholders = ticket_ids.map(() => '?').join(',');
-    const query = `UPDATE support_tickets SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`;
-    
-    db.run(query, [...params, ...ticket_ids], function(err) {
-        if (err) {
-            return res.status(500).json({ error: err.message });
+// --- ADMIN: GET ALL TICKETS ---
+router.get('/admin/tickets', isAuthenticated, (req, res) => {
+    try {
+        // VULNERABILITY: Weak admin check
+        if (req.user.username !== 'admin' && !req.user.isAdmin) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Admin access required' 
+            });
         }
-        
+
+        const { status, priority } = req.query;
+        let sql = `
+            SELECT t.*, u.username, u.email 
+            FROM support_tickets t
+            JOIN users u ON t.user_id = u.id
+        `;
+
+        const params = [];
+        const conditions = [];
+
+        if (status) {
+            conditions.push('t.status = ?');
+            params.push(status);
+        }
+
+        if (priority) {
+            conditions.push('t.priority = ?');
+            params.push(priority);
+        }
+
+        if (conditions.length > 0) {
+            sql += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        sql += ' ORDER BY t.created_at DESC';
+
+        const tickets = db.prepare(sql).all(...params);
+
         res.json({
-            message: 'Tickets updated',
-            affected: this.changes
+            success: true,
+            tickets: tickets
         });
-    });
+    } catch (error) {
+        console.error('Admin get tickets error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// --- ADMIN: REPLY TO TICKET ---
+router.post('/admin/ticket/:id/reply', isAuthenticated, (req, res) => {
+    try {
+        // VULNERABILITY: Weak admin check
+        if (req.user.username !== 'admin' && !req.user.isAdmin) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Admin access required' 
+            });
+        }
+
+        const ticketId = req.params.id;
+        const { message } = req.body;
+
+        if (!message) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Message is required' 
+            });
+        }
+
+        // VULNERABILITY: Stored XSS in admin messages
+        db.prepare(`
+            INSERT INTO ticket_messages (ticket_id, user_id, message, is_admin)
+            VALUES (?, ?, ?, 1)
+        `).run(ticketId, req.user.id, message);
+
+        // Update ticket status and timestamp
+        db.prepare(`
+            UPDATE support_tickets 
+            SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        `).run(ticketId);
+
+        res.json({
+            success: true,
+            message: 'Reply sent successfully'
+        });
+    } catch (error) {
+        console.error('Admin reply error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// --- DELETE TICKET (ADMIN) ---
+router.delete('/admin/ticket/:id', isAuthenticated, (req, res) => {
+    try {
+        // VULNERABILITY: Weak admin check via query parameter
+        if (req.query.admin_key !== 'delete123' && req.user.username !== 'admin') {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Admin access required' 
+            });
+        }
+
+        const ticketId = req.params.id;
+
+        // Delete messages first
+        db.prepare('DELETE FROM ticket_messages WHERE ticket_id = ?').run(ticketId);
+        
+        // Delete ticket
+        db.prepare('DELETE FROM support_tickets WHERE id = ?').run(ticketId);
+
+        res.json({
+            success: true,
+            message: 'Ticket deleted successfully'
+        });
+    } catch (error) {
+        console.error('Delete ticket error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
 });
 
 module.exports = router;
