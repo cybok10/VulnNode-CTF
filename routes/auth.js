@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./database/vuln_app.db');
+const db = require('../database/db');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
@@ -10,44 +9,53 @@ function md5(password) {
     return crypto.createHash('md5').update(password).digest('hex');
 }
 
-router.get('/login', (req, res) => res.render('login', { user: null, title: 'Login' }));
-router.get('/register', (req, res) => res.render('register', { user: null, title: 'Register' }));
+router.get('/login', (req, res) => {
+    res.render('login', { 
+        user: null, 
+        title: 'Login' 
+    });
+});
+
+router.get('/register', (req, res) => {
+    res.render('register', { 
+        user: null, 
+        title: 'Register' 
+    });
+});
 
 // Register
 router.post('/register', (req, res) => {
     const { username, password, email } = req.body;
     
-    // Use bcrypt for new registrations (matching database standard)
-    const hash = bcrypt.hashSync(password, 10);
+    try {
+        // Use bcrypt for new registrations (matching database standard)
+        const hash = bcrypt.hashSync(password, 10);
 
-    // VULNERABILITY: SQL Injection possible if input not sanitized
-    db.run("INSERT INTO users (username, password, email) VALUES (?, ?, ?)", 
-        [username, hash, email], function(err) {
-        if (err) {
-            return res.render('register', { 
-                user: null, 
-                title: 'Register', 
-                error: 'Username or email already taken' 
-            });
-        }
+        // Insert new user
+        db.prepare(
+            'INSERT INTO users (username, password, email) VALUES (?, ?, ?)'
+        ).run(username, hash, email);
+        
         res.redirect('/auth/login');
-    });
+    } catch (error) {
+        console.error('Register error:', error);
+        return res.render('register', { 
+            user: null, 
+            title: 'Register', 
+            error: 'Username or email already taken' 
+        });
+    }
 });
 
 // Login logic (VULNERABILITY: Weak password hashing)
 router.post('/login', (req, res) => {
     const { username, password } = req.body;
 
-    // VULNERABILITY: Verbose error messages aid attackers
-    db.get("SELECT * FROM users WHERE username = ?", [username], (err, user) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).render('login', { 
-                user: null, 
-                title: 'Login', 
-                error: 'Database error occurred' 
-            });
-        }
+    try {
+        // VULNERABILITY: Verbose error messages aid attackers
+        const user = db.prepare(
+            'SELECT * FROM users WHERE username = ?'
+        ).get(username);
         
         if (!user) {
             // VULNERABILITY: Reveals username doesn't exist
@@ -67,7 +75,7 @@ router.post('/login', (req, res) => {
         } catch (e) {
             // If bcrypt fails, try MD5 (for legacy/CTF purposes)
             const passwordHash = md5(password);
-            isValidPassword = (passwordHash === user.password || passwordHash === user.password_md5);
+            isValidPassword = (passwordHash === user.password);
         }
         
         if (isValidPassword) {
@@ -92,7 +100,9 @@ router.post('/login', (req, res) => {
             res.cookie('username', user.username);
 
             // Update last login
-            db.run("UPDATE users SET last_login = datetime('now') WHERE id = ?", [user.id]);
+            db.prepare(
+                "UPDATE users SET last_login = datetime('now') WHERE id = ?"
+            ).run(user.id);
 
             // Log successful login (information disclosure)
             console.log(`[+] User logged in: ${user.username} from ${req.ip}`);
@@ -106,7 +116,14 @@ router.post('/login', (req, res) => {
                 error: 'Invalid credentials' 
             });
         }
-    });
+    } catch (error) {
+        console.error('Login error:', error);
+        return res.status(500).render('login', { 
+            user: null, 
+            title: 'Login', 
+            error: 'Database error occurred' 
+        });
+    }
 });
 
 // Logout
@@ -124,30 +141,44 @@ router.get('/logout', (req, res) => {
 
 // Password reset (VULNERABILITY: No token verification)
 router.get('/reset-password', (req, res) => {
-    res.render('reset-password', { user: null, title: 'Reset Password' });
+    res.render('reset-password', { 
+        user: null, 
+        title: 'Reset Password' 
+    });
 });
 
 router.post('/reset-password', (req, res) => {
     const { email, new_password } = req.body;
     
-    // VULNERABILITY: No email verification, anyone can reset any account
-    const hash = bcrypt.hashSync(new_password, 10);
-    
-    db.run("UPDATE users SET password = ? WHERE email = ?", 
-        [hash, email], function(err) {
-        if (err || this.changes === 0) {
+    try {
+        // VULNERABILITY: No email verification, anyone can reset any account
+        const hash = bcrypt.hashSync(new_password, 10);
+        
+        const result = db.prepare(
+            'UPDATE users SET password = ? WHERE email = ?'
+        ).run(hash, email);
+        
+        if (result.changes === 0) {
             return res.render('reset-password', { 
                 user: null, 
                 title: 'Reset Password', 
                 error: 'Email not found' 
             });
         }
+        
         res.render('login', { 
             user: null, 
             title: 'Login', 
             success: 'Password reset successful! You can now login.' 
         });
-    });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        return res.render('reset-password', { 
+            user: null, 
+            title: 'Reset Password', 
+            error: 'An error occurred' 
+        });
+    }
 });
 
 module.exports = router;
