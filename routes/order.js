@@ -20,7 +20,7 @@ router.get('/', (req, res) => {
         SELECT 
             o.id,
             o.order_number,
-            o.total,
+            o.total_amount,
             o.status,
             o.created_at,
             COUNT(oi.id) as item_count
@@ -86,7 +86,7 @@ router.get('/:id', (req, res) => {
             SELECT 
                 oi.*,
                 p.name as product_name,
-                p.image as product_image
+                p.image_url as product_image
             FROM order_items oi
             JOIN products p ON oi.product_id = p.id
             WHERE oi.order_id = ?
@@ -171,7 +171,7 @@ router.post('/place', (req, res) => {
             
             // Create order
             db.run(
-                'INSERT INTO orders (user_id, order_number, total, status) VALUES (?, ?, ?, ?)',
+                'INSERT INTO orders (user_id, order_number, total_amount, status) VALUES (?, ?, ?, ?)',
                 [userId, orderNumber, total, 'pending'],
                 function(err) {
                     if (err) {
@@ -185,11 +185,12 @@ router.post('/place', (req, res) => {
                     
                     // Insert order items
                     const stmt = db.prepare(
-                        'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)'
+                        'INSERT INTO order_items (order_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)'
                     );
                     
                     cartItems.forEach(item => {
-                        stmt.run(orderId, item.product_id, item.quantity, item.price);
+                        const subtotal = item.price * item.quantity;
+                        stmt.run(orderId, item.product_id, item.quantity, item.price, subtotal);
                     });
                     
                     stmt.finalize();
