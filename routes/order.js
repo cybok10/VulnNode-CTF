@@ -1,153 +1,223 @@
 const express = require('express');
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
-const secrets = require('../config/secrets');
+const { isAuthenticated } = require('../middleware/auth');
 
-const db = new sqlite3.Database(secrets.DB_PATH);
+// Use correct database path
+const db = new sqlite3.Database('./database/vuln_app.db');
 
-// Middleware to ensure login
-function ensureAuthenticated(req, res, next) {
-    if (req.session.user) {
-        return next();
-    }
-    res.redirect('/auth/login');
-}
-
-router.use(ensureAuthenticated);
+// Apply authentication middleware
+router.use(isAuthenticated);
 
 /**
- * GET /order
- * Page to place a new order (Simulated Cart)
+ * GET /orders
+ * List all orders for the logged-in user
  */
 router.get('/', (req, res) => {
-    // Fetch products to populate dropdown
-    db.all("SELECT * FROM products", [], (err, products) => {
+    const userId = req.user.id;
+    
+    const query = `
+        SELECT 
+            o.id,
+            o.order_number,
+            o.total,
+            o.status,
+            o.created_at,
+            COUNT(oi.id) as item_count
+        FROM orders o
+        LEFT JOIN order_items oi ON o.id = oi.order_id
+        WHERE o.user_id = ?
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+    `;
+    
+    db.all(query, [userId], (err, orders) => {
         if (err) {
-            console.error("DB Error:", err);
-            return res.status(500).send("Database Error");
+            console.error('Orders error:', err);
+            return res.status(500).render('500', {
+                user: req.user,
+                error: err.message,
+                title: 'Error'
+            });
         }
-        res.render('order', { 
-            products: products,
-            user: req.session.user
+        
+        res.render('orders', {
+            user: req.user,
+            orders: orders || [],
+            title: 'My Orders'
         });
     });
 });
 
 /**
- * POST /order/checkout
- * VULNERABILITY: BUSINESS LOGIC FLAW (Negative Quantity)
+ * GET /orders/:id
+ * VULNERABILITY: IDOR - Order details
+ * Users can view other users' orders by changing the ID
  */
-router.post('/checkout', (req, res) => {
-    const { product_id, quantity } = req.body;
+router.get('/:id', (req, res) => {
+    const orderId = req.params.id;
     
-    // Ensure session user is valid
-    if (!req.session.user || !req.session.user.id) {
-        return res.redirect('/auth/login');
-    }
+    // VULNERABLE: No check if order belongs to current user
+    const orderQuery = `
+        SELECT 
+            o.*,
+            u.username,
+            u.email
+        FROM orders o
+        JOIN users u ON o.user_id = u.id
+        WHERE o.id = ?
+    `;
     
-    const userId = req.session.user.id;
-
-    // Fetch product price
-    db.get("SELECT * FROM products WHERE id = ?", [product_id], (err, product) => {
-        if (err || !product) return res.status(404).send("Product not found");
-
-        // ============================================================
-        // VULNERABILITY: LOGIC FLAW
-        // ============================================================
-        // We rely on client-side validation (HTML 'min="1"').
-        // A proxy (Burp/Zap) can bypass this and send negative numbers.
-        
-        let qty = parseInt(quantity);
-        
-        // DYNAMIC DIFFICULTY CHECK
-        // Level 3 (Advanced) patches this specific flaw
-        const securityLevel = req.session.difficulty || 1;
-        
-        if (securityLevel >= 3) {
-            if (qty <= 0) {
-                return res.status(400).send(`
-                    <div style="color: red; text-align: center; margin-top: 50px;">
-                        <h1>🚫 WAF Blocked 🚫</h1>
-                        <p>Malicious input detected: Negative or Zero Quantity.</p>
-                        <p><em>Switch to Beginner/Intermediate difficulty to exploit this.</em></p>
-                        <a href="/order">Go Back</a>
-                    </div>
-                `);
-            }
+    db.get(orderQuery, [orderId], (err, order) => {
+        if (err) {
+            console.error('Order detail error:', err);
+            return res.status(500).send('Database error');
         }
-
-        const totalPrice = product.price * qty;
-
-        // Get fresh user balance
-        db.get("SELECT balance FROM users WHERE id = ?", [userId], (err, row) => {
-            if (err) return res.status(500).send("DB Error");
-            
-            const currentBalance = row ? row.balance : 0;
-
-            // Check if user has enough balance.
-            // THE FLAW: If totalPrice is negative (e.g. -500), 
-            // currentBalance (100) is > -500, so this check PASSES.
-            if (currentBalance < totalPrice) {
-                return res.send(`
-                    <h3>Transaction Failed</h3>
-                    <p>Insufficient funds. You have $${currentBalance.toFixed(2)} but need $${totalPrice.toFixed(2)}.</p>
-                    <a href="/order">Try again</a>
-                `);
-            }
-
-            // Deduct balance (or add if negative due to math rule: - - = +)
-            const newBalance = currentBalance - totalPrice;
-
-            // Update User Balance in DB
-            db.run("UPDATE users SET balance = ? WHERE id = ?", [newBalance, userId], (err) => {
-                if (err) return res.status(500).send("Transaction failed during update");
-
-                // Record Order in History
-                db.run("INSERT INTO orders (user_id, product_id, quantity, total_price) VALUES (?, ?, ?, ?)", 
-                    [userId, product.id, qty, totalPrice], 
-                    (err) => {
-                        // Update session object so UI updates immediately
-                        req.session.user.balance = newBalance;
-                        
-                        let responseHtml = `
-                            <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-                            <div class="container mt-5 text-center">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h2 class="text-success">Order Successful!</h2>
-                                        <p>Item: ${product.name}</p>
-                                        <p>Quantity: ${qty}</p>
-                                        <p>Total: $${totalPrice.toFixed(2)}</p>
-                                        <hr>
-                                        <h4>New Balance: $${newBalance.toFixed(2)}</h4>
-                        `;
-
-                        // CHECK FOR EXPLOIT SUCCESS
-                        // If user "paid" a negative amount (meaning they stole money)
-                        if (totalPrice < 0) {
-                            responseHtml += `
-                                <div class="alert alert-warning mt-4">
-                                    <h4>💰 Business Logic Flaw Exploited!</h4>
-                                    <p>You tricked the system into refunding you for items you didn't buy.</p>
-                                    <p><strong>Flag:</strong> <code>FLAG{business_logic_negative_math}</code></p>
-                                </div>
-                            `;
-                            
-                            // Optional: Auto-mark challenge as solved in DB for scoreboard
-                            // In a real automated CTF, we might do this via an internal API call here.
-                        }
-
-                        responseHtml += `
-                                        <a href="/order" class="btn btn-primary mt-3">Buy More</a>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                        
-                        res.send(responseHtml);
-                    }
-                );
+        
+        if (!order) {
+            return res.status(404).render('404', {
+                user: req.user,
+                title: 'Order Not Found'
             });
+        }
+        
+        // Get order items
+        const itemsQuery = `
+            SELECT 
+                oi.*,
+                p.name as product_name,
+                p.image as product_image
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+        `;
+        
+        db.all(itemsQuery, [orderId], (err, items) => {
+            if (err) {
+                console.error('Order items error:', err);
+                return res.status(500).send('Database error');
+            }
+            
+            // IDOR FLAG: If viewing someone else's order
+            let idorFlag = null;
+            if (order.user_id !== req.user.id) {
+                idorFlag = 'FLAG{1d0r_v13w_0th3r_us3r_0rd3rs}';
+            }
+            
+            res.render('order-detail', {
+                user: req.user,
+                order: order,
+                items: items || [],
+                idorFlag: idorFlag,
+                title: `Order #${order.order_number}`
+            });
+        });
+    });
+});
+
+/**
+ * POST /orders/place
+ * Place a new order (from cart)
+ */
+router.post('/place', (req, res) => {
+    const userId = req.user.id;
+    
+    // Get cart items
+    const cartQuery = `
+        SELECT 
+            c.*,
+            p.name,
+            p.price,
+            p.stock
+        FROM cart c
+        JOIN products p ON c.product_id = p.id
+        WHERE c.user_id = ?
+    `;
+    
+    db.all(cartQuery, [userId], (err, cartItems) => {
+        if (err || !cartItems || cartItems.length === 0) {
+            return res.json({
+                success: false,
+                message: 'Cart is empty'
+            });
+        }
+        
+        // Calculate total
+        let total = 0;
+        for (let item of cartItems) {
+            // VULNERABILITY: Business logic flaw - negative quantities
+            total += item.price * item.quantity;
+        }
+        
+        // Check user balance
+        db.get('SELECT balance FROM users WHERE id = ?', [userId], (err, user) => {
+            if (err) {
+                return res.json({
+                    success: false,
+                    message: 'Database error'
+                });
+            }
+            
+            // VULNERABLE: Allows negative totals to pass
+            if (user.balance < total && total > 0) {
+                return res.json({
+                    success: false,
+                    message: 'Insufficient balance'
+                });
+            }
+            
+            // Generate order number
+            const orderNumber = 'ORD-' + Date.now();
+            
+            // Create order
+            db.run(
+                'INSERT INTO orders (user_id, order_number, total, status) VALUES (?, ?, ?, ?)',
+                [userId, orderNumber, total, 'pending'],
+                function(err) {
+                    if (err) {
+                        return res.json({
+                            success: false,
+                            message: 'Failed to create order'
+                        });
+                    }
+                    
+                    const orderId = this.lastID;
+                    
+                    // Insert order items
+                    const stmt = db.prepare(
+                        'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)'
+                    );
+                    
+                    cartItems.forEach(item => {
+                        stmt.run(orderId, item.product_id, item.quantity, item.price);
+                    });
+                    
+                    stmt.finalize();
+                    
+                    // Update user balance
+                    const newBalance = user.balance - total;
+                    db.run('UPDATE users SET balance = ? WHERE id = ?', [newBalance, userId]);
+                    
+                    // Clear cart
+                    db.run('DELETE FROM cart WHERE user_id = ?', [userId]);
+                    
+                    // Check for business logic exploit
+                    let flag = null;
+                    if (total < 0) {
+                        flag = 'FLAG{bus1n3ss_l0g1c_n3g4t1v3_pr1c3}';
+                    }
+                    
+                    res.json({
+                        success: true,
+                        message: 'Order placed successfully',
+                        orderNumber: orderNumber,
+                        orderId: orderId,
+                        total: total,
+                        newBalance: newBalance,
+                        flag: flag
+                    });
+                }
+            );
         });
     });
 });
