@@ -12,9 +12,10 @@ const db = new sqlite3.Database('./database/vuln_app.db', (err) => {
     }
 });
 
-// Home Page - Lists Products (excluding hidden ones)
+// Home Page - Lists Products
 router.get('/', (req, res) => {
-    const query = "SELECT * FROM products WHERE is_hidden = 0 OR is_hidden IS NULL ORDER BY is_featured DESC, created_at DESC";
+    // Simplified query to work with existing database schema
+    const query = "SELECT * FROM products ORDER BY id DESC";
     
     db.all(query, [], (err, products) => {
         if (err) {
@@ -43,7 +44,8 @@ router.get('/search', (req, res) => {
     }
     
     // UNSAFE QUERY CONSTRUCTION (intentional vulnerability)
-    const sql = `SELECT * FROM products WHERE (name LIKE '%${searchQuery}%' OR description LIKE '%${searchQuery}%' OR tags LIKE '%${searchQuery}%') AND (is_hidden = 0 OR is_hidden IS NULL)`;
+    // Simplified to work with existing schema
+    const sql = `SELECT * FROM products WHERE name LIKE '%${searchQuery}%' OR description LIKE '%${searchQuery}%'`;
 
     db.all(sql, [], (err, products) => {
         if (err) {
@@ -53,6 +55,7 @@ router.get('/search', (req, res) => {
                     <h2>Database Error</h2>
                     <pre>${err.message}</pre>
                     <p style="color: #ffd93d;">💡 Hint: Try SQL injection payloads in the search box</p>
+                    <p style="color: #888; font-size: 12px;">Example: ' UNION SELECT * FROM secrets--</p>
                     <a href="/" style="color: #6bcf7f;">← Back to Home</a>
                 </div>
             `);
