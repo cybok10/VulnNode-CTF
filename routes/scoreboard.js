@@ -39,14 +39,14 @@ router.get('/', optionalAuth, (req, res) => {
             }
         }
 
-        // Get leaderboard
+        // Get leaderboard (top 10)
         const leaderboard = db.prepare(`
             SELECT 
                 u.id,
                 u.username,
                 u.avatar,
                 COUNT(up.challenge_id) as solved_count,
-                SUM(s.points) as total_points
+                COALESCE(SUM(s.points), 0) as total_points
             FROM users u
             LEFT JOIN user_progress up ON u.id = up.user_id
             LEFT JOIN secrets s ON up.challenge_id = s.id
@@ -74,6 +74,48 @@ router.get('/', optionalAuth, (req, res) => {
     }
 });
 
+// --- GET SCOREBOARD API ---
+router.get('/api', optionalAuth, (req, res) => {
+    try {
+        // Get all challenges (without flags)
+        const challenges = db.prepare(`
+            SELECT id, name, category, difficulty, description, points, hint
+            FROM secrets
+            ORDER BY difficulty ASC, points ASC
+        `).all();
+
+        // Get leaderboard
+        const leaderboard = db.prepare(`
+            SELECT 
+                u.id,
+                u.username,
+                u.avatar,
+                COUNT(up.challenge_id) as solved_count,
+                COALESCE(SUM(s.points), 0) as total_points
+            FROM users u
+            LEFT JOIN user_progress up ON u.id = up.user_id
+            LEFT JOIN secrets s ON up.challenge_id = s.id
+            GROUP BY u.id
+            HAVING solved_count > 0
+            ORDER BY total_points DESC, solved_count DESC
+            LIMIT 20
+        `).all();
+
+        res.json({
+            success: true,
+            challenges,
+            leaderboard,
+            totalChallenges: challenges.length
+        });
+    } catch (error) {
+        console.error('Scoreboard API error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // --- SUBMIT FLAG ---
 router.post('/submit', isAuthenticated, (req, res) => {
     try {
@@ -96,7 +138,8 @@ router.post('/submit', isAuthenticated, (req, res) => {
         if (!challenge) {
             return res.json({
                 success: false,
-                message: 'Invalid flag. Try again!'
+                message: '❌ Invalid flag. Try again!',
+                attempts: true
             });
         }
 
@@ -110,7 +153,8 @@ router.post('/submit', isAuthenticated, (req, res) => {
         if (alreadySolved) {
             return res.json({
                 success: false,
-                message: 'You already solved this challenge!'
+                message: '⚠️ You already solved this challenge!',
+                duplicate: true
             });
         }
 
@@ -129,15 +173,17 @@ router.post('/submit', isAuthenticated, (req, res) => {
 
         res.json({
             success: true,
-            message: `Congratulations! You solved "${challenge.name}"`,
+            message: `🎉 Congratulations! You solved "${challenge.name}"`,
             points: challenge.points,
-            challengeName: challenge.name
+            challengeName: challenge.name,
+            challengeId: challenge.id
         });
     } catch (error) {
         console.error('Flag submission error:', error);
         res.json({
             success: false,
-            message: 'Error processing flag. Please try again.'
+            message: 'Error processing flag. Please try again.',
+            error: error.message
         });
     }
 });
@@ -168,7 +214,8 @@ router.get('/hint/:id', isAuthenticated, (req, res) => {
         console.error('Hint error:', error);
         res.json({
             success: false,
-            message: 'Error retrieving hint'
+            message: 'Error retrieving hint',
+            error: error.message
         });
     }
 });
@@ -181,6 +228,7 @@ router.get('/progress', isAuthenticated, (req, res) => {
                 s.id,
                 s.name,
                 s.category,
+                s.difficulty,
                 s.points,
                 up.solved_at
             FROM user_progress up
@@ -190,23 +238,76 @@ router.get('/progress', isAuthenticated, (req, res) => {
         `).all(req.user.id);
 
         const totalPoints = db.prepare(`
-            SELECT SUM(s.points) as total
+            SELECT COALESCE(SUM(s.points), 0) as total
             FROM user_progress up
             JOIN secrets s ON up.challenge_id = s.id
             WHERE up.user_id = ?
         `).get(req.user.id);
 
+        // Get total challenges count
+        const totalChallenges = db.prepare(
+            'SELECT COUNT(*) as count FROM secrets'
+        ).get();
+
         res.json({
             success: true,
             progress,
-            totalPoints: totalPoints ? totalPoints.total || 0 : 0,
-            solvedCount: progress.length
+            totalPoints: totalPoints ? totalPoints.total : 0,
+            solvedCount: progress.length,
+            totalChallenges: totalChallenges.count,
+            completionRate: totalChallenges.count > 0 
+                ? ((progress.length / totalChallenges.count) * 100).toFixed(1) 
+                : 0
         });
     } catch (error) {
         console.error('Progress error:', error);
         res.json({
             success: false,
-            message: 'Error retrieving progress'
+            message: 'Error retrieving progress',
+            error: error.message
+        });
+    }
+});
+
+// --- GET CHALLENGE DETAILS ---
+router.get('/challenge/:id', optionalAuth, (req, res) => {
+    try {
+        const challengeId = req.params.id;
+
+        const challenge = db.prepare(`
+            SELECT id, name, category, difficulty, description, points, hint
+            FROM secrets
+            WHERE id = ?
+        `).get(challengeId);
+
+        if (!challenge) {
+            return res.json({
+                success: false,
+                message: 'Challenge not found'
+            });
+        }
+
+        // Check if user solved it
+        let solved = false;
+        if (req.user) {
+            const progress = db.prepare(`
+                SELECT id FROM user_progress
+                WHERE user_id = ? AND challenge_id = ?
+            `).get(req.user.id, challengeId);
+            solved = !!progress;
+        }
+
+        res.json({
+            success: true,
+            challenge,
+            solved
+        });
+    } catch (error) {
+        console.error('Challenge details error:', error);
+        res.json({
+            success: false,
+            message: 'Error retrieving challenge',
+            error: error.message
         });
     }
 });
