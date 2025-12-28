@@ -1,11 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./database/vuln_app.db');
+
+// Use separate sqlite3 connection for async operations in this route
+// (Better-sqlite3 in database/db.js is for sync operations)
+const db = new sqlite3.Database('./database/vuln_app.db', (err) => {
+    if (err) {
+        console.error('[routes/index.js] Database connection error:', err.message);
+    } else {
+        console.log('[routes/index.js] Connected to SQLite database (async mode)');
+    }
+});
 
 // Home Page - Lists Products (excluding hidden ones)
 router.get('/', (req, res) => {
     const query = "SELECT * FROM products WHERE is_hidden = 0 OR is_hidden IS NULL ORDER BY is_featured DESC, created_at DESC";
+    
     db.all(query, [], (err, products) => {
         if (err) {
             console.error('Database error:', err);
