@@ -1,0 +1,177 @@
+<%- include('partials/header') %>
+
+<div class="container my-5">
+    <div class="row">
+        <div class="col-md-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>🎟️ Support Ticket #<%= ticket.id %></h2>
+                <a href="/support" class="btn btn-secondary">← Back to Tickets</a>
+            </div>
+            
+            <!-- Ticket Information Card -->
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><%= ticket.subject %></h5>
+                        <% 
+                        let statusBadge = 'secondary';
+                        if (ticket.status === 'open') statusBadge = 'warning';
+                        if (ticket.status === 'in_progress') statusBadge = 'info';
+                        if (ticket.status === 'resolved') statusBadge = 'success';
+                        if (ticket.status === 'closed') statusBadge = 'dark';
+                        %>
+                        <span class="badge badge-<%= statusBadge %> badge-pill px-3 py-2" style="font-size: 14px;">
+                            <%= ticket.status ? ticket.status.toUpperCase().replace('_', ' ') : 'OPEN' %>
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <strong>📂 Category:</strong>
+                            <p class="text-muted mb-0"><%= ticket.category || 'General' %></p>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <strong>📅 Created:</strong>
+                            <p class="text-muted mb-0"><%= new Date(ticket.created_at).toLocaleString() %></p>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <strong>⚡ Priority:</strong>
+                            <% 
+                            let priorityColor = 'text-secondary';
+                            if (ticket.priority === 'high') priorityColor = 'text-danger';
+                            if (ticket.priority === 'medium') priorityColor = 'text-warning';
+                            %>
+                            <p class="<%= priorityColor %> mb-0 font-weight-bold"><%= ticket.priority ? ticket.priority.toUpperCase() : 'NORMAL' %></p>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <strong>🎫 Ticket ID:</strong>
+                            <p class="text-muted mb-0">#<%= ticket.id %></p>
+                        </div>
+                    </div>
+                    <% if (ticket.description) { %>
+                        <hr>
+                        <div>
+                            <strong>Description:</strong>
+                            <p class="mt-2"><%= ticket.description %></p>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+            
+            <!-- Messages Thread -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">💬 Message Thread</h5>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <% if (messages && messages.length > 0) { %>
+                        <% messages.forEach((msg, index) => { %>
+                            <% 
+                            const isUser = msg.sender_id === user.id;
+                            const bgColor = isUser ? '#e3f2fd' : '#f5f5f5';
+                            const borderColor = isUser ? '#2196F3' : '#9e9e9e';
+                            const alignClass = isUser ? 'ml-auto' : '';
+                            %>
+                            <div class="message mb-3 p-3 rounded <%= alignClass %>" style="background: <%= bgColor %>; border-left: 4px solid <%= borderColor %>; max-width: 85%;">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <strong style="color: <%= borderColor %>;">
+                                            <%= isUser ? '👤' : '👥' %> <%= msg.username || 'Support Team' %>
+                                        </strong>
+                                        <% if (msg.is_admin) { %>
+                                            <span class="badge badge-danger badge-sm ml-2">ADMIN</span>
+                                        <% } %>
+                                    </div>
+                                    <small class="text-muted"><%= new Date(msg.created_at).toLocaleString() %></small>
+                                </div>
+                                <div class="message-content" style="white-space: pre-wrap; word-wrap: break-word;">
+                                    <%- msg.message %>
+                                </div>
+                                <% if (msg.attachment) { %>
+                                    <div class="mt-2">
+                                        <a href="<%= msg.attachment %>" class="btn btn-sm btn-outline-primary" target="_blank">
+                                            📎 View Attachment
+                                        </a>
+                                    </div>
+                                <% } %>
+                            </div>
+                            
+                            <% if (index < messages.length - 1) { %>
+                                <div class="text-center my-2">
+                                    <small class="text-muted">• • •</small>
+                                </div>
+                            <% } %>
+                        <% }) %>
+                    <% } else { %>
+                        <div class="text-center py-5">
+                            <div style="font-size: 60px; opacity: 0.3;">💬</div>
+                            <p class="text-muted">No messages yet. Start the conversation below!</p>
+                        </div>
+                    <% } %>
+                </div>
+                
+                <!-- Reply Form -->
+                <div class="card-footer bg-white">
+                    <form action="/api/support/ticket/<%= ticket.id %>/reply" method="POST" id="replyForm">
+                        <div class="form-group">
+                            <label for="message" class="font-weight-bold">✏️ Add Reply:</label>
+                            <textarea 
+                                name="message" 
+                                id="message" 
+                                class="form-control" 
+                                rows="4" 
+                                placeholder="Type your message here..."
+                                required
+                                style="border: 2px solid #ddd; border-radius: 8px;"
+                            ></textarea>
+                            <small class="form-text text-muted">Press Ctrl+Enter to submit</small>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('message').value = ''">Clear</button>
+                            </div>
+                            <div>
+                                <% if (ticket.status === 'open' || ticket.status === 'in_progress') { %>
+                                    <button type="button" class="btn btn-success mr-2" onclick="alert('Mark as resolved feature coming soon!')">Mark as Resolved</button>
+                                <% } %>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-paper-plane"></i> Send Reply
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="mt-4 text-center">
+                <div class="btn-group" role="group">
+                    <button class="btn btn-outline-info" onclick="window.print()">🖨️ Print Ticket</button>
+                    <button class="btn btn-outline-warning" onclick="alert('Export feature coming soon!')">📥 Export</button>
+                    <button class="btn btn-outline-danger" onclick="if(confirm('Close this ticket?')) alert('Close feature coming soon!')">❌ Close Ticket</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-scroll to bottom of messages
+window.addEventListener('load', function() {
+    const messagesContainer = document.querySelector('.card-body[style*="overflow-y"]');
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+});
+
+// Ctrl+Enter to submit
+document.getElementById('message').addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+        document.getElementById('replyForm').submit();
+    }
+});
+</script>
+
+<%- include('partials/footer') %>
