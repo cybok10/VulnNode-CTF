@@ -1,265 +1,332 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
+const { isAuthenticated, optionalAuth } = require('../middleware/auth');
 
-/**
- * Frontend Routes - UI Pages
- * These routes render EJS templates for the web interface
- */
-
-// Shopping Cart Page
-router.get('/cart', (req, res) => {
+// ======================
+// CART PAGE
+// ======================
+router.get('/cart', optionalAuth, (req, res) => {
     try {
-        const userId = req.session?.userId || null;
-        
-        if (!userId) {
-            // Guest cart - stored in session
-            return res.render('cart', {
-                user: req.session.user,
-                title: 'Shopping Cart',
-                cartItems: req.session.cart || [],
-                cartTotal: calculateCartTotal(req.session.cart || [])
-            });
+        const userId = req.user ? req.user.id : null;
+        let cartItems = [];
+        let cartTotal = 0;
+
+        if (userId) {
+            // Get cart items for logged-in user
+            const items = db.prepare(`
+                SELECT 
+                    c.id,
+                    c.quantity,
+                    p.id as product_id,
+                    p.name,
+                    p.price,
+                    p.image_url,
+                    (p.price * c.quantity) as subtotal
+                FROM cart c
+                JOIN products p ON c.product_id = p.id
+                WHERE c.user_id = ?
+            `).all(userId);
+
+            cartItems = items;
+            cartTotal = items.reduce((sum, item) => sum + item.subtotal, 0);
         }
 
-        // Logged in user - fetch from database
-        const query = `
-            SELECT c.*, p.name, p.price, p.image_url 
-            FROM cart c 
-            JOIN products p ON c.product_id = p.id 
-            WHERE c.user_id = ${userId}
-        `; // VULNERABILITY: SQL Injection via session manipulation
-
-        db.all(query, [], (err, cartItems) => {
-            if (err) {
-                // VULNERABILITY: Verbose error messages
-                return res.status(500).render('500', { 
-                    error: err.message, 
-                    stack: err.stack,
-                    query: query // Leak SQL query
-                });
-            }
-
-            res.render('cart', {
-                user: req.session.user,
-                title: 'Shopping Cart',
-                cartItems: cartItems || [],
-                cartTotal: calculateCartTotal(cartItems || [])
-            });
+        res.render('cart', {
+            user: req.user,
+            title: 'Shopping Cart',
+            cartItems,
+            cartTotal,
+            itemCount: cartItems.length
         });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Checkout Page
-router.get('/checkout', (req, res) => {
-    try {
-        const userId = req.session?.userId;
-        
-        if (!userId) {
-            return res.redirect('/auth/login?redirect=/checkout');
-        }
-
-        // VULNERABILITY: IDOR - Can view any user's cart by manipulating session
-        const query = `SELECT c.*, p.name, p.price FROM cart c JOIN products p ON c.product_id = p.id WHERE c.user_id = ${userId}`;
-        
-        db.all(query, [], (err, cartItems) => {
-            if (err) {
-                return res.status(500).render('500', { error: err });
-            }
-
-            // Fetch user addresses
-            db.all('SELECT * FROM addresses WHERE user_id = ?', [userId], (err, addresses) => {
-                res.render('checkout', {
-                    user: req.session.user,
-                    title: 'Checkout',
-                    cartItems: cartItems || [],
-                    addresses: addresses || [],
-                    cartTotal: calculateCartTotal(cartItems || [])
-                });
-            });
+    } catch (err) {
+        console.error('Cart page error:', err);
+        res.status(500).render('error', { 
+            user: req.user,
+            error: 'Failed to load cart',
+            message: err.message // VULNERABILITY: Verbose error messages
         });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
     }
 });
 
-// Support Page
-router.get('/support', (req, res) => {
+// ======================
+// CHECKOUT PAGE
+// ======================
+router.get('/checkout', isAuthenticated, (req, res) => {
     try {
-        const userId = req.session?.userId;
+        const userId = req.user.id;
 
-        if (!userId) {
-            return res.render('support', {
-                user: req.session.user,
-                title: 'Support Center',
-                tickets: [],
-                canCreateTicket: false
-            });
+        // Get cart items
+        const cartItems = db.prepare(`
+            SELECT 
+                c.id,
+                c.quantity,
+                p.id as product_id,
+                p.name,
+                p.price,
+                p.image_url,
+                (p.price * c.quantity) as subtotal
+            FROM cart c
+            JOIN products p ON c.product_id = p.id
+            WHERE c.user_id = ?
+        `).all(userId);
+
+        if (cartItems.length === 0) {
+            return res.redirect('/cart?error=empty');
         }
 
-        // VULNERABILITY: IDOR - No proper authorization check
-        const ticketId = req.query.view || null;
-        
-        if (ticketId) {
-            // View specific ticket - VULNERABILITY: Can view any ticket
-            db.get(`SELECT * FROM support_tickets WHERE id = ${ticketId}`, [], (err, ticket) => {
-                if (err) {
-                    return res.status(500).render('500', { error: err });
-                }
+        const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
+        const shipping = subtotal > 50 ? 0 : 9.99;
+        const tax = subtotal * 0.08;
+        const total = subtotal + shipping + tax;
 
-                // Fetch messages
-                db.all(`SELECT * FROM ticket_messages WHERE ticket_id = ${ticketId}`, [], (err, messages) => {
-                    res.render('support', {
-                        user: req.session.user,
-                        title: 'Support Ticket',
-                        ticket: ticket,
-                        messages: messages || [],
-                        canCreateTicket: true
-                    });
-                });
-            });
-        } else {
-            // List all user tickets
-            db.all('SELECT * FROM support_tickets WHERE user_id = ? ORDER BY created_at DESC', [userId], (err, tickets) => {
-                res.render('support', {
-                    user: req.session.user,
-                    title: 'Support Center',
-                    tickets: tickets || [],
-                    canCreateTicket: true
-                });
-            });
-        }
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+        // Get user addresses
+        const addresses = db.prepare(`
+            SELECT * FROM addresses WHERE user_id = ?
+        `).all(userId);
 
-// Admin Panel Page
-router.get('/admin', (req, res) => {
-    try {
-        // VULNERABILITY: Weak authentication check
-        if (!req.session.user || req.session.user.username !== 'admin') {
-            return res.status(403).render('403', { 
-                message: 'Access Denied',
-                hint: '<!-- Try manipulating your session cookie -->'
-            });
-        }
+        // Get saved payment methods
+        const paymentMethods = db.prepare(`
+            SELECT * FROM payment_methods WHERE user_id = ?
+        `).all(userId);
 
-        // Fetch statistics
-        db.get('SELECT COUNT(*) as total_users FROM users', [], (err, userCount) => {
-            db.get('SELECT COUNT(*) as total_orders FROM orders', [], (err, orderCount) => {
-                db.get('SELECT COUNT(*) as total_products FROM products', [], (err, productCount) => {
-                    res.render('admin', {
-                        user: req.session.user,
-                        title: 'Admin Panel',
-                        stats: {
-                            users: userCount?.total_users || 0,
-                            orders: orderCount?.total_orders || 0,
-                            products: productCount?.total_products || 0
-                        }
-                    });
-                });
-            });
+        res.render('checkout', {
+            user: req.user,
+            title: 'Checkout',
+            cartItems,
+            subtotal,
+            shipping,
+            tax,
+            total,
+            addresses,
+            paymentMethods
         });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// CTF Score Board
-router.get('/scoreboard', (req, res) => {
-    try {
-        const userId = req.session?.userId || null;
-        
-        // Fetch all challenges
-        db.all('SELECT * FROM secrets ORDER BY id', [], (err, challenges) => {
-            if (err) {
-                return res.status(500).render('500', { error: err });
-            }
-
-            let userProgress = [];
-            
-            if (userId) {
-                // Fetch user progress
-                db.all('SELECT * FROM user_progress WHERE user_id = ?', [userId], (err, progress) => {
-                    userProgress = progress || [];
-                    
-                    res.render('scoreboard', {
-                        user: req.session.user,
-                        title: 'CTF Challenges',
-                        challenges: challenges || [],
-                        progress: userProgress,
-                        totalChallenges: challenges?.length || 0,
-                        solvedCount: userProgress.filter(p => p.solved).length
-                    });
-                });
-            } else {
-                res.render('scoreboard', {
-                    user: null,
-                    title: 'CTF Challenges',
-                    challenges: challenges || [],
-                    progress: [],
-                    totalChallenges: challenges?.length || 0,
-                    solvedCount: 0
-                });
-            }
+    } catch (err) {
+        console.error('Checkout page error:', err);
+        res.status(500).render('error', { 
+            user: req.user,
+            error: 'Failed to load checkout',
+            message: err.message
         });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
     }
 });
 
-// Profile Page
-router.get('/profile/:id?', (req, res) => {
+// ======================
+// ORDER CONFIRMATION PAGE
+// ======================
+router.get('/order/:orderNumber', (req, res) => {
     try {
-        // VULNERABILITY: IDOR - Can view any user's profile
-        const profileId = req.params.id || req.session?.userId;
-        
-        if (!profileId) {
-            return res.redirect('/auth/login');
+        const { orderNumber } = req.params;
+
+        // VULNERABILITY: No authentication check - IDOR
+        // Anyone can view any order by guessing order number
+        const order = db.prepare(`
+            SELECT 
+                o.*,
+                u.username,
+                u.email
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.order_number = ?
+        `).get(orderNumber);
+
+        if (!order) {
+            return res.status(404).render('404', {
+                user: req.user,
+                title: 'Order Not Found',
+                path: req.path
+            });
         }
 
-        // VULNERABILITY: SQL Injection
-        const query = `SELECT * FROM users WHERE id = ${profileId}`;
-        
-        db.get(query, [], (err, profile) => {
-            if (err) {
-                return res.status(500).render('500', { 
-                    error: err.message,
-                    query: query // Information disclosure
-                });
-            }
+        // Get order items
+        const orderItems = db.prepare(`
+            SELECT 
+                oi.*,
+                p.name,
+                p.image_url
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.id
+            WHERE oi.order_id = ?
+        `).all(order.id);
 
-            if (!profile) {
-                return res.status(404).render('404');
-            }
-
-            // Fetch user's orders
-            db.all('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', [profileId], (err, orders) => {
-                // Fetch user's progress
-                db.all('SELECT * FROM user_progress WHERE user_id = ?', [profileId], (err, progress) => {
-                    res.render('profile', {
-                        user: req.session.user,
-                        title: `${profile.username}'s Profile`,
-                        profile: profile,
-                        orders: orders || [],
-                        progress: progress || [],
-                        isOwnProfile: req.session?.userId == profileId
-                    });
-                });
-            });
+        res.render('order-confirmation', {
+            user: req.user,
+            title: 'Order Confirmation',
+            order,
+            orderItems
         });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+    } catch (err) {
+        console.error('Order confirmation error:', err);
+        res.status(500).render('error', { 
+            user: req.user,
+            error: 'Failed to load order',
+            message: err.message
+        });
     }
 });
 
-// Helper function
-function calculateCartTotal(cartItems) {
-    if (!cartItems || cartItems.length === 0) return 0;
-    return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-}
+// ======================
+// SUPPORT TICKET PAGE
+// ======================
+router.get('/support', optionalAuth, (req, res) => {
+    try {
+        let tickets = [];
+
+        if (req.user) {
+            // VULNERABILITY: SQL Injection via user_id
+            // In real scenario, user could manipulate session
+            tickets = db.prepare(`
+                SELECT 
+                    st.*,
+                    (SELECT COUNT(*) FROM ticket_messages WHERE ticket_id = st.id) as message_count
+                FROM support_tickets st
+                WHERE st.user_id = ${req.user.id}
+                ORDER BY st.created_at DESC
+            `).all();
+        }
+
+        res.render('support', {
+            user: req.user,
+            title: 'Support Center',
+            tickets
+        });
+    } catch (err) {
+        console.error('Support page error:', err);
+        res.status(500).render('error', { 
+            user: req.user,
+            error: 'Failed to load support',
+            message: err.message
+        });
+    }
+});
+
+// ======================
+// SUPPORT TICKET DETAIL
+// ======================
+router.get('/support/ticket/:id', isAuthenticated, (req, res) => {
+    try {
+        const ticketId = req.params.id;
+
+        // VULNERABILITY: IDOR - No ownership check
+        const ticket = db.prepare(`
+            SELECT * FROM support_tickets WHERE id = ?
+        `).get(ticketId);
+
+        if (!ticket) {
+            return res.status(404).render('404', {
+                user: req.user,
+                title: 'Ticket Not Found',
+                path: req.path
+            });
+        }
+
+        // Get messages
+        const messages = db.prepare(`
+            SELECT 
+                tm.*,
+                u.username
+            FROM ticket_messages tm
+            LEFT JOIN users u ON tm.sender_id = u.id
+            WHERE tm.ticket_id = ?
+            ORDER BY tm.created_at ASC
+        `).all(ticketId);
+
+        res.render('ticket-detail', {
+            user: req.user,
+            title: 'Support Ticket',
+            ticket,
+            messages
+        });
+    } catch (err) {
+        console.error('Ticket detail error:', err);
+        res.status(500).render('error', { 
+            user: req.user,
+            error: 'Failed to load ticket',
+            message: err.message
+        });
+    }
+});
+
+// ======================
+// SCOREBOARD PAGE
+// ======================
+router.get('/scoreboard', optionalAuth, (req, res) => {
+    try {
+        // Get all challenges
+        const challenges = db.prepare(`
+            SELECT * FROM secrets ORDER BY id
+        `).all();
+
+        let userProgress = [];
+        if (req.user) {
+            userProgress = db.prepare(`
+                SELECT challenge_id FROM user_progress WHERE user_id = ?
+            `).all(req.user.id).map(r => r.challenge_id);
+        }
+
+        // Calculate statistics
+        const totalChallenges = challenges.length;
+        const solvedCount = userProgress.length;
+        const percentage = totalChallenges > 0 ? Math.round((solvedCount / totalChallenges) * 100) : 0;
+
+        res.render('scoreboard', {
+            user: req.user,
+            title: 'CTF Scoreboard',
+            challenges,
+            userProgress,
+            stats: {
+                total: totalChallenges,
+                solved: solvedCount,
+                percentage
+            }
+        });
+    } catch (err) {
+        console.error('Scoreboard error:', err);
+        res.status(500).render('error', { 
+            user: req.user,
+            error: 'Failed to load scoreboard',
+            message: err.message
+        });
+    }
+});
+
+// ======================
+// PROFILE PAGE
+// ======================
+router.get('/profile', isAuthenticated, (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // Get user details
+        const user = db.prepare(`
+            SELECT id, username, email, created_at FROM users WHERE id = ?
+        `).get(userId);
+
+        // Get order history
+        const orders = db.prepare(`
+            SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 10
+        `).all(userId);
+
+        // Get addresses
+        const addresses = db.prepare(`
+            SELECT * FROM addresses WHERE user_id = ?
+        `).all(userId);
+
+        res.render('profile', {
+            user: req.user,
+            title: 'My Profile',
+            profile: user,
+            orders,
+            addresses
+        });
+    } catch (err) {
+        console.error('Profile error:', err);
+        res.status(500).render('error', { 
+            user: req.user,
+            error: 'Failed to load profile',
+            message: err.message
+        });
+    }
+});
 
 module.exports = router;
