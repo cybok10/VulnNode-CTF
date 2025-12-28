@@ -3,8 +3,9 @@ const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
 const db = new sqlite3.Database('./database/vuln_app.db');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 
-// Weak MD5 hash function (intentionally vulnerable - matches database)
+// Weak MD5 hash function (intentionally vulnerable - for backward compatibility)
 function md5(password) {
     return crypto.createHash('md5').update(password).digest('hex');
 }
@@ -15,12 +16,13 @@ router.get('/register', (req, res) => res.render('register', { user: null, title
 // Register
 router.post('/register', (req, res) => {
     const { username, password, email } = req.body;
-    // VULNERABILITY: No password complexity check
-    const hash = md5(password);
+    
+    // Use bcrypt for new registrations (matching database standard)
+    const hash = bcrypt.hashSync(password, 10);
 
     // VULNERABILITY: SQL Injection possible if input not sanitized
-    db.run("INSERT INTO users (username, password, password_md5, email) VALUES (?, ?, ?, ?)", 
-        [username, hash, hash, email], function(err) {
+    db.run("INSERT INTO users (username, password, email) VALUES (?, ?, ?)", 
+        [username, hash, email], function(err) {
         if (err) {
             return res.render('register', { 
                 user: null, 
@@ -56,19 +58,28 @@ router.post('/login', (req, res) => {
             });
         }
 
-        // VULNERABILITY: MD5 password hashing (weak)
-        const passwordHash = md5(password);
+        // Check password with bcrypt (primary method)
+        let isValidPassword = false;
         
-        if (passwordHash === user.password || passwordHash === user.password_md5) {
+        try {
+            // Try bcrypt first (for passwords created by init_db.js or new registrations)
+            isValidPassword = bcrypt.compareSync(password, user.password);
+        } catch (e) {
+            // If bcrypt fails, try MD5 (for legacy/CTF purposes)
+            const passwordHash = md5(password);
+            isValidPassword = (passwordHash === user.password || passwordHash === user.password_md5);
+        }
+        
+        if (isValidPassword) {
             // Set session
             req.session.user = {
                 id: user.id,
                 username: user.username,
                 email: user.email,
-                isAdmin: user.isAdmin,
-                balance: user.balance,
-                avatar: user.avatar,
-                loyalty_points: user.loyalty_points
+                isAdmin: user.isAdmin || 0,
+                balance: user.balance || 0,
+                avatar: user.avatar || '/img/avatars/default.png',
+                loyalty_points: user.loyalty_points || 0
             };
             
             // VULNERABILITY: Generate a predictable admin token cookie
@@ -86,7 +97,6 @@ router.post('/login', (req, res) => {
             // Log successful login (information disclosure)
             console.log(`[+] User logged in: ${user.username} from ${req.ip}`);
 
-            // FIXED: Redirect to homepage instead of dashboard
             return res.redirect('/');
         } else {
             // VULNERABILITY: Reveals password is incorrect
@@ -121,10 +131,10 @@ router.post('/reset-password', (req, res) => {
     const { email, new_password } = req.body;
     
     // VULNERABILITY: No email verification, anyone can reset any account
-    const hash = md5(new_password);
+    const hash = bcrypt.hashSync(new_password, 10);
     
-    db.run("UPDATE users SET password = ?, password_md5 = ? WHERE email = ?", 
-        [hash, hash, email], function(err) {
+    db.run("UPDATE users SET password = ? WHERE email = ?", 
+        [hash, email], function(err) {
         if (err || this.changes === 0) {
             return res.render('reset-password', { 
                 user: null, 
