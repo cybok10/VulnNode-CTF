@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found | VulnNode CTF</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .error-container {
+            text-align: center;
+            color: white;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .error-code {
+            font-size: 150px;
+            font-weight: bold;
+            margin: 0;
+            text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
+            animation: pulse 2s infinite;
+        }
+        .error-message {
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        .error-description {
+            font-size: 16px;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        .btn-home {
+            background: white;
+            color: #667eea;
+            padding: 12px 30px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            margin: 10px;
+            transition: all 0.3s;
+        }
+        .btn-home:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            color: #667eea;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .debug-info {
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h1 class="error-code">404</h1>
+        <h2 class="error-message">Oops! Page Not Found</h2>
+        <p class="error-description">
+            The page you're looking for doesn't exist or has been moved.
+            <% if (typeof path !== 'undefined') { %>
+                <br>Requested path: <code><%= path %></code>
+            <% } %>
+        </p>
+        
+        <div>
+            <a href="/" class="btn-home">🏠 Home</a>
+            <a href="/products" class="btn-home">🛍️ Products</a>
+            <a href="/scoreboard" class="btn-home">🏆 Scoreboard</a>
+            <a href="/support" class="btn-home">💬 Support</a>
+        </div>
+
+        <!-- VULNERABILITY: Information Disclosure via HTML Comments -->
+        <!-- DEBUG: 404 Handler triggered -->
+        <!-- Session ID: <%= typeof user !== 'undefined' && user ? user.id : 'Not logged in' %> -->
+        <!-- Server Time: <%= new Date().toISOString() %> -->
+        <!-- CTF Tip: Always check HTML comments for hidden information -->
+        <!-- FLAG{verbose_error_handling_leaks_info} -->
+
+        <% if (process.env.NODE_ENV !== 'production') { %>
+        <div class="debug-info">
+            <strong>🐛 Debug Information (Development Mode):</strong><br>
+            Requested URL: <%= path %><br>
+            Method: GET<br>
+            User Agent: Check your browser<br>
+            Timestamp: <%= new Date().toISOString() %><br>
+            <% if (typeof user !== 'undefined' && user) { %>
+                Logged in as: <%= user.username %> (ID: <%= user.id %>)<br>
+            <% } else { %>
+                User: Anonymous<br>
+            <% } %>
+        </div>
+        <% } %>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
