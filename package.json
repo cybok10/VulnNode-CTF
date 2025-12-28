@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "init-db": "node config/init_db.js",
+    "init-db": "node database/init_db.js",
+    "init-db-complete": "node database/init_complete_db.js",
+    "db-reset": "rm -f database/vuln_app.db && node database/init_complete_db.js",
+    "db-backup": "cp database/vuln_app.db database/vuln_app.backup.db",
+    "db-restore": "cp database/vuln_app.backup.db database/vuln_app.db",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -53,6 +57,18 @@
     "type": "git",
     "url": "git+https://github.com/cybok10/VulnNode-CTF.git"
   },
+  "keywords": [
+    "ctf",
+    "vulnerable",
+    "security",
+    "pentest",
+    "owasp",
+    "educational"
+  ],
   "author": "VulnNode Team",
-  "license": "MIT"
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cybok10/VulnNode-CTF/issues"
+  },
+  "homepage": "https://github.com/cybok10/VulnNode-CTF#readme"
 }
