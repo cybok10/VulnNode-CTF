@@ -1,106 +1,172 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-const secrets = require('../config/secrets');
+const db = require('../database/db');
+const { optionalAuth } = require('../middleware/auth');
 
-const db = new sqlite3.Database(secrets.DB_PATH);
-
-// Middleware to ensure session difficulty is set
-router.use((req, res, next) => {
-    if (!req.session.difficulty) {
-        req.session.difficulty = 1; // Default to Beginner
-    }
-    next();
-});
+// Apply optional auth (works for both logged in and guest users)
+router.use(optionalAuth);
 
 /**
- * GET /scoreboard
- * Renders the Challenge Map and Progress
+ * GET /gamification
+ * User achievements, badges, and loyalty points
  */
 router.get('/', (req, res) => {
-    // Fetch all challenges
-    db.all("SELECT * FROM challenges ORDER BY difficulty ASC", [], (err, challenges) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).send("Database Error - Could not load challenges.");
-        }
-        
-        // Calculate progress statistics
-        const total = challenges.length;
-        const solved = challenges.filter(c => c.solved === 1).length;
-        const percent = total === 0 ? 0 : Math.round((solved / total) * 100);
-
-        // Render the scoreboard view
-        res.render('scoreboard', { 
-            challenges: challenges, 
-            user: req.session.user,
-            percent: percent,
-            difficulty: req.session.difficulty
-        });
-    });
-});
-
-/**
- * POST /scoreboard/submit
- * Endpoint for submitting CTF flags
- */
-router.post('/submit', (req, res) => {
-    const { flag } = req.body;
-
-    if (!flag) return res.json({ success: false, message: "No flag provided." });
-
-    // 1. Check if flag exists in database
-    db.get("SELECT * FROM challenges WHERE flag = ?", [flag.trim()], (err, challenge) => {
-        if (err) return res.status(500).json({ success: false, message: "Database Error" });
-        
-        if (!challenge) {
-            return res.json({ success: false, message: "❌ Incorrect Flag. Try harder!" });
-        }
-
-        if (challenge.solved === 1) {
-            return res.json({ success: true, message: `⚠️ You already solved: ${challenge.name}` });
-        }
-
-        // 2. Mark challenge as solved
-        db.run("UPDATE challenges SET solved = 1 WHERE id = ?", [challenge.id], (err) => {
-            if (err) return res.status(500).json({ success: false, message: "Update Error" });
-            
-            console.log(`[+] Challenge Solved: ${challenge.name}`);
-            return res.json({ 
-                success: true, 
-                message: `🎉 Correct! You solved: ${challenge.name}`,
-                challengeId: challenge.id
-            });
-        });
-    });
-});
-
-/**
- * POST /api/difficulty
- * Updates the security level of the lab
- */
-router.post('/api/difficulty', (req, res) => {
-    const { level } = req.body;
-    
-    // Validate level input
-    const newLevel = parseInt(level);
-    if (![1, 2, 3].includes(newLevel)) {
-        return res.status(400).json({ success: false, message: "Invalid difficulty level" });
+    if (!req.user) {
+        return res.redirect('/auth/login');
     }
-
-    req.session.difficulty = newLevel;
     
-    let levelName = "Beginner";
-    if (newLevel === 2) levelName = "Intermediate";
-    if (newLevel === 3) levelName = "Advanced";
+    try {
+        // Get user stats
+        const userStats = db.prepare(`
+            SELECT 
+                loyalty_points,
+                (SELECT COUNT(*) FROM orders WHERE user_id = ?) as total_orders,
+                (SELECT COUNT(*) FROM reviews WHERE user_id = ?) as total_reviews,
+                (SELECT COUNT(*) FROM user_progress WHERE user_id = ?) as challenges_solved
+            FROM users
+            WHERE id = ?
+        `).get(req.user.id, req.user.id, req.user.id, req.user.id);
+        
+        // Get recent achievements
+        const recentSolves = db.prepare(`
+            SELECT 
+                s.name as challenge_name,
+                s.points,
+                up.solved_at
+            FROM user_progress up
+            JOIN secrets s ON up.challenge_id = s.id
+            WHERE up.user_id = ?
+            ORDER BY up.solved_at DESC
+            LIMIT 5
+        `).all(req.user.id);
+        
+        // Calculate level and badges
+        const points = userStats.loyalty_points || 0;
+        let level = 1;
+        let badge = 'Beginner';
+        
+        if (points >= 1000) {
+            level = 5;
+            badge = 'Master Hacker';
+        } else if (points >= 500) {
+            level = 4;
+            badge = 'Expert';
+        } else if (points >= 250) {
+            level = 3;
+            badge = 'Advanced';
+        } else if (points >= 100) {
+            level = 2;
+            badge = 'Intermediate';
+        }
+        
+        res.render('gamification', {
+            user: req.user,
+            stats: userStats,
+            recentSolves: recentSolves,
+            level: level,
+            badge: badge,
+            title: 'Achievements'
+        });
+    } catch (error) {
+        console.error('Gamification error:', error);
+        res.status(500).render('500', {
+            user: req.user,
+            error: error.message,
+            title: 'Error'
+        });
+    }
+});
 
-    console.log(`[!] Security Level Changed to: ${levelName} (Level ${newLevel})`);
+/**
+ * POST /gamification/redeem
+ * Redeem loyalty points for discounts
+ */
+router.post('/redeem', (req, res) => {
+    if (!req.user) {
+        return res.json({
+            success: false,
+            message: 'Please login first'
+        });
+    }
+    
+    const { points } = req.body;
+    const pointsToRedeem = parseInt(points);
+    
+    if (!pointsToRedeem || pointsToRedeem <= 0) {
+        return res.json({
+            success: false,
+            message: 'Invalid points amount'
+        });
+    }
+    
+    try {
+        // Get current points
+        const user = db.prepare('SELECT loyalty_points FROM users WHERE id = ?').get(req.user.id);
+        
+        if (user.loyalty_points < pointsToRedeem) {
+            return res.json({
+                success: false,
+                message: 'Insufficient loyalty points'
+            });
+        }
+        
+        // Redeem points (1 point = $0.01 discount)
+        const discount = pointsToRedeem * 0.01;
+        const newPoints = user.loyalty_points - pointsToRedeem;
+        
+        db.prepare('UPDATE users SET loyalty_points = ? WHERE id = ?')
+          .run(newPoints, req.user.id);
+        
+        res.json({
+            success: true,
+            message: `Redeemed ${pointsToRedeem} points for $${discount.toFixed(2)} discount`,
+            discount: discount,
+            remainingPoints: newPoints
+        });
+    } catch (error) {
+        console.error('Redeem error:', error);
+        res.json({
+            success: false,
+            message: 'Error redeeming points'
+        });
+    }
+});
 
-    res.json({ 
-        success: true, 
-        level: newLevel,
-        message: `Security level updated to ${levelName}` 
-    });
+/**
+ * GET /gamification/leaderboard
+ * Global leaderboard for all users
+ */
+router.get('/leaderboard', (req, res) => {
+    try {
+        const leaderboard = db.prepare(`
+            SELECT 
+                u.id,
+                u.username,
+                u.avatar,
+                u.loyalty_points,
+                COUNT(up.challenge_id) as challenges_solved,
+                SUM(s.points) as total_ctf_points
+            FROM users u
+            LEFT JOIN user_progress up ON u.id = up.user_id
+            LEFT JOIN secrets s ON up.challenge_id = s.id
+            GROUP BY u.id
+            ORDER BY total_ctf_points DESC, challenges_solved DESC, u.loyalty_points DESC
+            LIMIT 50
+        `).all();
+        
+        res.render('leaderboard', {
+            user: req.user,
+            leaderboard: leaderboard,
+            title: 'Leaderboard'
+        });
+    } catch (error) {
+        console.error('Leaderboard error:', error);
+        res.status(500).render('500', {
+            user: req.user,
+            error: error.message,
+            title: 'Error'
+        });
+    }
 });
 
 module.exports = router;
