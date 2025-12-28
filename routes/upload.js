@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../database/db');
+const { isAuthenticated, optionalAuth } = require('../middleware/auth');
 
 /**
  * File Upload Routes
@@ -13,6 +14,7 @@ const db = require('../database/db');
  * - No file size limits
  * - Weak file validation
  * - Directory listing
+ * - LFI (Local File Inclusion)
  */
 
 // VULNERABILITY: Insecure file storage configuration
@@ -20,6 +22,10 @@ const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const uploadDir = req.body.uploadDir || 'uploads';
         // VULNERABILITY: Path traversal - can upload to any directory
+        // Ensure directory exists
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
@@ -33,61 +39,70 @@ const storage = multer.diskStorage({
 const upload = multer({ 
     storage: storage,
     // No fileFilter - accepts ANY file type including .php, .jsp, .exe
-    // No limits - can upload huge files
+    // No limits - can upload huge files (up to server memory)
 });
 
 // Upload avatar/profile picture
-router.post('/avatar', upload.single('avatar'), (req, res) => {
+router.post('/avatar', isAuthenticated, upload.single('avatar'), (req, res) => {
     try {
-        const userId = req.session?.userId;
-        
-        if (!userId) {
-            return res.status(401).json({ error: 'Authentication required' });
-        }
+        const userId = req.user.id;
 
         if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'No file uploaded' 
+            });
         }
 
         // VULNERABILITY: No file type validation
         // Accepts .php, .jsp, .exe, shell scripts, etc.
-        const filePath = req.file.path;
         const fileName = req.file.filename;
         
         // Update user's avatar in database
-        db.run('UPDATE users SET avatar = ? WHERE id = ?', [fileName, userId], (err) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
+        db.prepare('UPDATE users SET avatar = ? WHERE id = ?')
+          .run(fileName, userId);
 
-            res.json({
-                success: true,
-                message: 'Avatar uploaded successfully',
-                filename: fileName,
-                path: `/uploads/${fileName}`,
-                hint: 'Try uploading a PHP shell or other executable files...'
-            });
+        // Check if dangerous file uploaded
+        let flag = null;
+        const dangerousExtensions = ['.php', '.jsp', '.asp', '.exe', '.sh', '.py', '.rb'];
+        if (dangerousExtensions.some(ext => fileName.toLowerCase().endsWith(ext))) {
+            flag = 'FLAG{unr3str1ct3d_f1l3_upl04d}';
+        }
+
+        res.json({
+            success: true,
+            message: 'Avatar uploaded successfully',
+            filename: fileName,
+            path: `/uploads/${fileName}`,
+            hint: 'Try uploading a PHP shell or other executable files...',
+            flag: flag
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Avatar upload error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
 // Upload product image (vendor/admin only)
-router.post('/product-image', upload.single('image'), (req, res) => {
+router.post('/product-image', isAuthenticated, upload.single('image'), (req, res) => {
     try {
         // VULNERABILITY: Weak authorization check
-        const userRole = req.session?.user?.role;
-        
-        if (userRole !== 'vendor' && userRole !== 'admin') {
+        if (!req.user.isAdmin && req.user.username !== 'admin') {
             return res.status(403).json({ 
-                error: 'Vendor or admin access required',
+                success: false,
+                error: 'Admin access required',
                 hint: '<!-- Manipulate your session to change role -->'
             });
         }
 
         if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'No file uploaded' 
+            });
         }
 
         res.json({
@@ -97,22 +112,24 @@ router.post('/product-image', upload.single('image'), (req, res) => {
             path: `/uploads/products/${req.file.filename}`
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
 // Upload support ticket attachment
-router.post('/ticket-attachment', upload.single('attachment'), (req, res) => {
+router.post('/ticket-attachment', isAuthenticated, upload.single('attachment'), (req, res) => {
     try {
-        const userId = req.session?.userId;
+        const userId = req.user.id;
         const ticketId = req.body.ticket_id;
-        
-        if (!userId) {
-            return res.status(401).json({ error: 'Authentication required' });
-        }
 
         if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'No file uploaded' 
+            });
         }
 
         // VULNERABILITY: No validation of file content
@@ -126,21 +143,23 @@ router.post('/ticket-attachment', upload.single('attachment'), (req, res) => {
             flag_hint: 'Upload a webshell and access it...'
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
 // Multiple file upload
-router.post('/bulk', upload.array('files', 10), (req, res) => {
+router.post('/bulk', isAuthenticated, upload.array('files', 10), (req, res) => {
     try {
-        const userId = req.session?.userId;
-        
-        if (!userId) {
-            return res.status(401).json({ error: 'Authentication required' });
-        }
+        const userId = req.user.id;
 
         if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ error: 'No files uploaded' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'No files uploaded' 
+            });
         }
 
         const uploadedFiles = req.files.map(file => ({
@@ -155,7 +174,10 @@ router.post('/bulk', upload.array('files', 10), (req, res) => {
             files: uploadedFiles
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
@@ -171,6 +193,7 @@ router.get('/list', (req, res) => {
         fs.readdir(dirPath, { withFileTypes: true }, (err, files) => {
             if (err) {
                 return res.status(500).json({ 
+                    success: false,
                     error: err.message,
                     path: dirPath // Information disclosure
                 });
@@ -182,16 +205,25 @@ router.get('/list', (req, res) => {
                 path: `/${directory}/${file.name}`
             }));
 
+            let flag = null;
+            if (directory.includes('..')) {
+                flag = 'FLAG{d1r3ct0ry_tr4v3rs4l}';
+            }
+
             res.json({
                 success: true,
                 directory: directory,
                 files: fileList,
                 count: fileList.length,
-                hint: 'Try directory traversal with ?dir=../'
+                hint: 'Try directory traversal with ?dir=../',
+                flag: flag
             });
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
@@ -201,7 +233,10 @@ router.get('/download', (req, res) => {
         const filename = req.query.file;
         
         if (!filename) {
-            return res.status(400).json({ error: 'Filename required' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Filename required' 
+            });
         }
 
         // VULNERABILITY: No path sanitization - can access any file
@@ -211,14 +246,18 @@ router.get('/download', (req, res) => {
         res.download(filePath, (err) => {
             if (err) {
                 res.status(404).json({ 
+                    success: false,
                     error: 'File not found',
                     path: filePath, // Information disclosure
-                    hint: 'Try path traversal: ?file=../../config/secrets.js'
+                    hint: 'Try path traversal: ?file=../../database/vuln_app.db'
                 });
             }
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
@@ -228,7 +267,10 @@ router.get('/view', (req, res) => {
         const filename = req.query.file;
         
         if (!filename) {
-            return res.status(400).json({ error: 'Filename required' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Filename required' 
+            });
         }
 
         // VULNERABILITY: Direct file read without sanitization
@@ -237,21 +279,31 @@ router.get('/view', (req, res) => {
         fs.readFile(filePath, 'utf8', (err, data) => {
             if (err) {
                 return res.status(500).json({ 
+                    success: false,
                     error: err.message,
                     path: filePath,
-                    hint: 'FLAG{local_file_inclusion_achieved}'
+                    hint: 'Try: ?file=../../package.json'
                 });
+            }
+
+            let flag = null;
+            if (filename.includes('..')) {
+                flag = 'FLAG{local_file_inclusion_achieved}';
             }
 
             res.json({
                 success: true,
                 filename: filename,
                 content: data,
-                size: data.length
+                size: data.length,
+                flag: flag
             });
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
@@ -261,7 +313,10 @@ router.delete('/delete', (req, res) => {
         const filename = req.query.file;
         
         if (!filename) {
-            return res.status(400).json({ error: 'Filename required' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Filename required' 
+            });
         }
 
         // VULNERABILITY: No authentication or authorization
@@ -270,18 +325,25 @@ router.delete('/delete', (req, res) => {
         
         fs.unlink(filePath, (err) => {
             if (err) {
-                return res.status(500).json({ error: err.message });
+                return res.status(500).json({ 
+                    success: false,
+                    error: err.message 
+                });
             }
 
             res.json({
                 success: true,
                 message: 'File deleted',
                 filename: filename,
-                hint: 'You can delete any file on the server!'
+                hint: 'You can delete any file in uploads!',
+                warning: 'Be careful with this power!'
             });
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
@@ -291,7 +353,10 @@ router.get('/info', (req, res) => {
         const filename = req.query.file;
         
         if (!filename) {
-            return res.status(400).json({ error: 'Filename required' });
+            return res.status(400).json({ 
+                success: false,
+                error: 'Filename required' 
+            });
         }
 
         // VULNERABILITY: Path traversal
@@ -299,7 +364,10 @@ router.get('/info', (req, res) => {
         
         fs.stat(filePath, (err, stats) => {
             if (err) {
-                return res.status(404).json({ error: 'File not found' });
+                return res.status(404).json({ 
+                    success: false,
+                    error: 'File not found' 
+                });
             }
 
             res.json({
@@ -310,11 +378,14 @@ router.get('/info', (req, res) => {
                 modified: stats.mtime,
                 isFile: stats.isFile(),
                 isDirectory: stats.isDirectory(),
-                permissions: stats.mode
+                permissions: stats.mode.toString(8)
             });
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            success: false,
+            error: error.message 
+        });
     }
 });
 
