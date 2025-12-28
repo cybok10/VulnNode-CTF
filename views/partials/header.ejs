@@ -23,18 +23,19 @@
             <ul class="navbar-nav me-auto">
                 <li class="nav-item"><a class="nav-link" href="/"><i class="fa-solid fa-home"></i> Products</a></li>
                 
+                <!-- CTF Scoreboard - Prominent Position -->
+                <li class="nav-item">
+                    <a class="nav-link text-warning fw-bold" href="/scoreboard">
+                        <i class="fa-solid fa-trophy"></i> Scoreboard
+                        <span class="badge bg-warning text-dark">CTF</span>
+                    </a>
+                </li>
+                
                 <% if (user) { %>
                     <!-- Cart for logged-in users -->
                     <li class="nav-item">
                         <a class="nav-link" href="/cart">
                             <i class="fa-solid fa-shopping-cart"></i> Cart
-                        </a>
-                    </li>
-                    
-                    <!-- Support Tickets -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="/support">
-                            <i class="fa-solid fa-ticket"></i> Support
                         </a>
                     </li>
                     
@@ -44,12 +45,19 @@
                             <i class="fa-solid fa-box"></i> Orders
                         </a>
                     </li>
+                    
+                    <!-- Support Tickets -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="/support">
+                            <i class="fa-solid fa-ticket"></i> Support
+                        </a>
+                    </li>
                 <% } %>
                 
                 <!-- Report Issue (XSS target) -->
                 <li class="nav-item">
                     <a class="nav-link text-danger" href="/report">
-                        <i class="fa-solid fa-flag"></i> Report Issue
+                        <i class="fa-solid fa-flag"></i> Report
                     </a>
                 </li>
             </ul>
@@ -83,9 +91,14 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="/user/dashboard"><i class="fa-solid fa-user"></i> Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/user/profile"><i class="fa-solid fa-id-card"></i> Profile</a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="/orders"><i class="fa-solid fa-box"></i> My Orders</a></li>
+                            <li><a class="dropdown-item" href="/cart"><i class="fa-solid fa-shopping-cart"></i> Shopping Cart</a></li>
                             <li><a class="dropdown-item" href="/support"><i class="fa-solid fa-ticket"></i> Support Tickets</a></li>
-                            <li><a class="dropdown-item" href="/user/profile"><i class="fa-solid fa-cog"></i> Settings</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-warning" href="/scoreboard"><i class="fa-solid fa-trophy"></i> CTF Scoreboard</a></li>
+                            <li><a class="dropdown-item" href="/user/settings"><i class="fa-solid fa-cog"></i> Settings</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item text-danger" href="/auth/logout"><i class="fa-solid fa-sign-out-alt"></i> Logout</a></li>
                         </ul>
