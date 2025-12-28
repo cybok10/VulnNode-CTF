@@ -1,12 +1,93 @@
-version: '3'
+# ============================================================
+# VulnNode-CTF Docker Compose Configuration
+# ============================================================
+# Easy deployment with Docker Compose
+#
+# Usage:
+#   docker-compose up -d      # Start in background
+#   docker-compose logs -f    # View logs
+#   docker-compose down       # Stop and remove
+#
+# WARNING: This application is INTENTIONALLY VULNERABLE
+# ============================================================
+
+version: '3.8'
+
 services:
-  web:
-    build: .
+  # ============================================================
+  # VulnNode-CTF Application
+  # ============================================================
+  vulnnode-ctf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    container_name: vulnnode-ctf
+    
+    # Port mapping
     ports:
       - "3000:3000"
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
+    
+    # Environment variables
     environment:
       - NODE_ENV=development
+      - PORT=3000
+      - DB_PATH=/app/database/vuln_app.db
+      - SESSION_SECRET=supersecretkey
+      - CTF_ENABLED=true
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      - ENABLE_SQLI=true
+      - ENABLE_XSS=true
+      - ENABLE_COMMAND_INJECTION=true
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+    
+    # Volume mounts for persistence
+    volumes:
+      - ./database:/app/database
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./public:/app/public:ro
+    
+    # Restart policy
     restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Network
+    networks:
+      - vulnnode-network
+    
+    # Labels
+    labels:
+      - "com.vulnnode.description=Intentionally Vulnerable E-Commerce Application"
+      - "com.vulnnode.version=3.0"
+      - "com.vulnnode.security=VULNERABLE"
+
+# ============================================================
+# Networks
+# ============================================================
+networks:
+  vulnnode-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ============================================================
+# Volumes
+# ============================================================
+volumes:
+  database:
+    driver: local
+  uploads:
+    driver: local
+  logs:
+    driver: local
