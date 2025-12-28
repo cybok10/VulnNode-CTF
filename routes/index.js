@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
+const { optionalAuth } = require('../middleware/auth');
 
 // Use separate sqlite3 connection for async operations in this route
 // (Better-sqlite3 in database/db.js is for sync operations)
@@ -12,22 +13,25 @@ const db = new sqlite3.Database('./database/vuln_app.db', (err) => {
     }
 });
 
+// Apply optional auth (works for both logged in and guest users)
+router.use(optionalAuth);
+
 // Home Page - Lists Products
 router.get('/', (req, res) => {
     // Simplified query to work with existing database schema
-    const query = "SELECT * FROM products ORDER BY id DESC";
+    const query = "SELECT * FROM products WHERE is_hidden = 0 ORDER BY is_featured DESC, id DESC";
     
     db.all(query, [], (err, products) => {
         if (err) {
             console.error('Database error:', err);
             return res.render('index', {
-                user: req.session.user,
+                user: req.user,
                 products: [],
                 title: 'Home'
             });
         }
         res.render('index', { 
-            user: req.session.user, 
+            user: req.user, 
             products: products || [], 
             title: 'VulnNode Shop - Home' 
         });
@@ -60,48 +64,74 @@ router.get('/search', (req, res) => {
                 </div>
             `);
         }
-        res.render('index', { 
-            user: req.session.user, 
+        
+        // Check if user found the SQL injection flag
+        let flag = null;
+        if (searchQuery.toLowerCase().includes('union') || 
+            searchQuery.toLowerCase().includes('secrets')) {
+            flag = 'FLAG{sql_1nj3ct10n_m4st3r}';
+        }
+        
+        res.render('search-results', { 
+            user: req.user, 
             products: products || [], 
+            searchQuery: searchQuery,
+            flag: flag,
             title: `Search Results: ${searchQuery}` 
         });
     });
 });
 
-// Report Page (XSS Trigger)
+// Report Page (SSRF/XSS Trigger)
 router.get('/report', (req, res) => {
-    res.render('report', { user: req.session.user, title: 'Report Issue' });
+    res.render('report', { 
+        user: req.user, 
+        title: 'Report Issue' 
+    });
 });
 
-// POST Route for the Admin Bot
+// POST Route for the Admin Bot (SSRF Vulnerability)
 router.post('/report', async (req, res) => {
     const { url } = req.body;
+    
     if (!url) {
-        return res.status(400).send("URL is required");
+        return res.status(400).json({
+            success: false,
+            message: 'URL is required'
+        });
     }
 
-    // In background, trigger the bot (if bot.js exists)
+    // VULNERABILITY: SSRF - No validation on URL
+    // User can make the server request internal URLs
     try {
         const bot = require('../utils/bot');
         bot.visitUrl(url).catch(err => console.error('[BOT ERROR]:', err));
-        res.send(`
-            <div style="background: #1a1a1a; color: #6bcf7f; padding: 30px; text-align: center; font-family: Arial;">
-                <h2>✓ Report Submitted</h2>
-                <p>Admin has been notified and will review your link shortly.</p>
-                <a href="/" style="color: #6bcf7f; text-decoration: none;">← Back to Home</a>
-            </div>
-        `);
+        
+        res.json({
+            success: true,
+            message: 'Report submitted successfully. Admin will review your link shortly.',
+            hint: 'Try accessing internal services like http://localhost or file:// URLs'
+        });
     } catch (err) {
         console.error('[BOT] Bot module not found or error:', err.message);
-        res.send(`
-            <div style="background: #1a1a1a; color: #6bcf7f; padding: 30px; text-align: center; font-family: Arial;">
-                <h2>✓ Report Submitted</h2>
-                <p>Your report has been logged. Admin will review it soon.</p>
-                <p style="color: #888; font-size: 12px;">(Bot feature not configured)</p>
-                <a href="/" style="color: #6bcf7f; text-decoration: none;">← Back to Home</a>
-            </div>
-        `);
+        
+        res.json({
+            success: true,
+            message: 'Your report has been logged. Admin will review it soon.',
+            note: 'Bot feature not configured'
+        });
     }
+});
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+    res.json({
+        status: 'running',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        vulnerabilities: 'MANY - This is intentional!',
+        ctf_challenges: 10
+    });
 });
 
 module.exports = router;
