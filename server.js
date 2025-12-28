@@ -104,8 +104,30 @@ app.get('/serverinfo', (req, res) => {
 });
 
 // --- Error Handling ---
+// 404 Handler - Render complete page instead of just header
 app.use((req, res) => {
-    res.status(404).render('partials/header', { user: req.session.user, title: '404' });
+    res.status(404).render('404', { 
+        user: req.session.user, 
+        title: 'Page Not Found',
+        path: req.path
+    });
+});
+
+// 500 Error Handler - With intentional information disclosure
+app.use((err, req, res, next) => {
+    console.error('Error caught:', err);
+    
+    // VULNERABILITY: Exposing full error details including stack traces
+    res.status(500).render('500', {
+        user: req.session.user,
+        title: 'Internal Server Error',
+        error: {
+            message: err.message,
+            stack: err.stack,
+            code: err.code,
+            sql: err.sql || null  // Expose SQL queries on error
+        }
+    });
 });
 
 // --- Start Server ---
@@ -141,6 +163,7 @@ app.listen(PORT, () => {
     console.log(`    Cart: http://localhost:${PORT}/cart`);
     console.log(`    Support: http://localhost:${PORT}/support`);
     console.log(`    Admin: http://localhost:${PORT}/admin`);
+    console.log(`    Scoreboard: http://localhost:${PORT}/scoreboard`);
     console.log(``);
     console.log(`[*] Do NOT deploy in production!`);
     console.log(`[*] For educational purposes only.`);
