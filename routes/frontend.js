@@ -267,17 +267,18 @@ router.get('/scoreboard', optionalAuth, (req, res) => {
         // Calculate statistics
         const totalChallenges = challenges.length;
         const solvedCount = userProgress.length;
-        const percentage = totalChallenges > 0 ? Math.round((solvedCount / totalChallenges) * 100) : 0;
+        const percent = totalChallenges > 0 ? Math.round((solvedCount / totalChallenges) * 100) : 0;
 
         res.render('scoreboard', {
             user: req.user,
             title: 'CTF Scoreboard',
             challenges,
             userProgress,
+            percent,  // Pass percent at top level for template
             stats: {
                 total: totalChallenges,
                 solved: solvedCount,
-                percentage
+                percentage: percent  // Also keep in stats for backward compatibility
             }
         });
     } catch (err) {
