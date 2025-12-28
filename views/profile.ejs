@@ -1,0 +1,157 @@
+<%- include('partials/header') %>
+
+<div class="container my-5">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <div style="width: 100px; height: 100px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; color: white; font-weight: bold;">
+                            <%= profile.username.charAt(0).toUpperCase() %>
+                        </div>
+                    </div>
+                    <h5 class="mb-1"><%= profile.username %></h5>
+                    <p class="text-muted mb-2" style="font-size: 14px;"><%= profile.email %></p>
+                    <small class="text-muted">Member since <%= new Date(profile.created_at).toLocaleDateString() %></small>
+                    
+                    <hr>
+                    
+                    <div class="list-group list-group-flush">
+                        <a href="/profile" class="list-group-item list-group-item-action active">Profile</a>
+                        <a href="/orders" class="list-group-item list-group-item-action">Orders</a>
+                        <a href="/support" class="list-group-item list-group-item-action">Support</a>
+                        <a href="/auth/logout" class="list-group-item list-group-item-action text-danger">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="col-md-9">
+            <h2 class="mb-4">My Profile</h2>
+            
+            <!-- Order History -->
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📦 Recent Orders</h5>
+                </div>
+                <div class="card-body">
+                    <% if (orders && orders.length > 0) { %>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Order #</th>
+                                        <th>Date</th>
+                                        <th>Total</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% orders.forEach(order => { %>
+                                        <tr>
+                                            <td><strong>#<%= order.order_number || order.id %></strong></td>
+                                            <td><%= new Date(order.created_at).toLocaleDateString() %></td>
+                                            <td><strong>$<%= (order.total_amount || 0).toFixed(2) %></strong></td>
+                                            <td>
+                                                <% 
+                                                let statusClass = 'secondary';
+                                                if (order.status === 'completed') statusClass = 'success';
+                                                if (order.status === 'pending') statusClass = 'warning';
+                                                if (order.status === 'processing') statusClass = 'info';
+                                                if (order.status === 'cancelled') statusClass = 'danger';
+                                                %>
+                                                <span class="badge badge-<%= statusClass %>"><%= order.status || 'pending' %></span>
+                                            </td>
+                                            <td>
+                                                <a href="/order/<%= order.order_number || order.id %>" class="btn btn-sm btn-outline-primary">View</a>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                    <% } else { %>
+                        <div class="text-center py-5">
+                            <div style="font-size: 60px; opacity: 0.3;">📦</div>
+                            <p class="text-muted">No orders yet. Start shopping!</p>
+                            <a href="/" class="btn btn-primary">Browse Products</a>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+            
+            <!-- Saved Addresses -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">📍 Saved Addresses</h5>
+                </div>
+                <div class="card-body">
+                    <% if (addresses && addresses.length > 0) { %>
+                        <div class="row">
+                            <% addresses.forEach((addr, index) => { %>
+                                <div class="col-md-6 mb-3">
+                                    <div class="border p-3 rounded h-100" style="background: #f8f9fa;">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <strong class="text-primary">🏠 <%= addr.label || 'Address ' + (index + 1) %></strong>
+                                            <% if (addr.is_default) { %>
+                                                <span class="badge badge-success">Default</span>
+                                            <% } %>
+                                        </div>
+                                        <p class="mb-0" style="font-size: 14px;">
+                                            <%= addr.street %><br>
+                                            <%= addr.city %>, <%= addr.state %> <%= addr.zip %>
+                                            <% if (addr.country) { %><br><%= addr.country %><% } %>
+                                        </p>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    <% } else { %>
+                        <div class="text-center py-4">
+                            <div style="font-size: 50px; opacity: 0.3;">📍</div>
+                            <p class="text-muted">No saved addresses.</p>
+                            <button class="btn btn-success" onclick="alert('Address management coming soon!')">Add Address</button>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+            
+            <!-- Account Information -->
+            <div class="card mt-4 shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">⚙️ Account Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <strong>Username:</strong>
+                            <p><%= profile.username %></p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Email:</strong>
+                            <p><%= profile.email %></p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Account Created:</strong>
+                            <p><%= new Date(profile.created_at).toLocaleString() %></p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>User ID:</strong>
+                            <p class="text-muted">#<%= profile.id %></p>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <button class="btn btn-outline-primary" onclick="alert('Password change coming soon!')">Change Password</button>
+                        <button class="btn btn-outline-secondary" onclick="alert('Email update coming soon!')">Update Email</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('partials/footer') %>
