@@ -7,6 +7,8 @@ const db = new sqlite3.Database('./database/vuln_app.db');
 function isAuthenticated(req, res, next) {
     // Check session
     if (req.session && req.session.user) {
+        // FIX: Set req.user for consistent access
+        req.user = req.session.user;
         return next();
     }
     
@@ -17,6 +19,7 @@ function isAuthenticated(req, res, next) {
         try {
             const user = JSON.parse(userData);
             req.session.user = user;
+            req.user = user; // FIX: Set req.user
             return next();
         } catch (e) {
             // Fail silently
@@ -28,6 +31,7 @@ function isAuthenticated(req, res, next) {
         db.get('SELECT * FROM users WHERE api_key = ?', [req.headers['x-api-key']], (err, user) => {
             if (user) {
                 req.session.user = user;
+                req.user = user; // FIX: Set req.user
                 return next();
             }
             return res.status(401).json({ error: 'Unauthorized' });
@@ -43,6 +47,9 @@ function isAdmin(req, res, next) {
     if (!req.session || !req.session.user) {
         return res.status(401).json({ error: 'Authentication required' });
     }
+    
+    // FIX: Set req.user
+    req.user = req.session.user;
     
     // VULNERABILITY: Only checking a boolean that can be manipulated
     if (req.session.user.isAdmin === 1 || req.session.user.isAdmin === '1' || req.session.user.isAdmin === true) {
@@ -63,6 +70,9 @@ function isVendor(req, res, next) {
         return res.status(401).json({ error: 'Authentication required' });
     }
     
+    // FIX: Set req.user
+    req.user = req.session.user;
+    
     if (req.session.user.isVendor === 1 || req.session.user.isVendor === true) {
         return next();
     }
@@ -74,6 +84,7 @@ function isVendor(req, res, next) {
 function optionalAuth(req, res, next) {
     if (req.session && req.session.user) {
         // User is authenticated
+        req.user = req.session.user; // FIX: Set req.user
         return next();
     }
     
@@ -83,6 +94,7 @@ function optionalAuth(req, res, next) {
         db.get('SELECT * FROM users WHERE id = ?', [req.cookies.user_id], (err, user) => {
             if (user) {
                 req.session.user = user;
+                req.user = user; // FIX: Set req.user
             }
             return next();
         });
@@ -189,6 +201,7 @@ function validateSession(req, res, next) {
             
             // VULNERABILITY: Updating session with fresh data (could be manipulated)
             req.session.user = user;
+            req.user = user; // FIX: Set req.user
             next();
         });
         return;
