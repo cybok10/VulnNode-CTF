@@ -49,15 +49,18 @@ const productRoutes = require('./routes/product');
 const userRoutes = require('./routes/user');
 const apiRoutes = require('./routes/api');
 
-// NEW ROUTES - Backend API
+// Backend API Routes
 const productsApiRoutes = require('./routes/products'); // Enhanced product API
 const cartRoutes = require('./routes/cart');             // Shopping cart
 const checkoutRoutes = require('./routes/checkout');     // Checkout process
 const supportRoutes = require('./routes/support');       // Support tickets
 const uploadRoutes = require('./routes/upload');         // File upload
 const adminRoutes = require('./routes/admin');           // Admin panel
+const orderRoutes = require('./routes/order');           // Order management
+const scoreboardRoutes = require('./routes/scoreboard'); // CTF Scoreboard
+const gamificationRoutes = require('./routes/gamification'); // Gamification features
 
-// NEW ROUTES - Frontend Pages
+// Frontend UI Routes
 const frontendRoutes = require('./routes/frontend');     // Cart, Checkout, Support UI pages
 
 // --- Mount Routes ---
@@ -66,9 +69,18 @@ app.use('/', indexRoutes);
 app.use('/auth', authRoutes);
 app.use('/products', productRoutes);  // Frontend product routes
 app.use('/user', userRoutes);
-app.use('/api', apiRoutes);
+
+// CTF Scoreboard
+app.use('/scoreboard', scoreboardRoutes);
+
+// Gamification
+app.use('/gamification', gamificationRoutes);
+
+// Orders
+app.use('/orders', orderRoutes);
 
 // API routes
+app.use('/api', apiRoutes);
 app.use('/api/products', productsApiRoutes);  // Enhanced product API with vulnerabilities
 app.use('/api/cart', cartRoutes);             // Cart operations
 app.use('/api/checkout', checkoutRoutes);     // Checkout and orders
@@ -85,7 +97,8 @@ app.get('/health', (req, res) => {
         status: 'running',
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
-        vulnerabilities: 'MANY - This is intentional!'
+        vulnerabilities: 'MANY - This is intentional!',
+        ctf_challenges: 10
     });
 });
 
@@ -107,7 +120,7 @@ app.get('/serverinfo', (req, res) => {
 // 404 Handler - Render complete page instead of just header
 app.use((req, res) => {
     res.status(404).render('404', { 
-        user: req.session.user, 
+        user: req.session ? req.session.user : null, 
         title: 'Page Not Found',
         path: req.path
     });
@@ -119,7 +132,7 @@ app.use((err, req, res, next) => {
     
     // VULNERABILITY: Exposing full error details including stack traces
     res.status(500).render('500', {
-        user: req.session.user,
+        user: req.session ? req.session.user : null,
         title: 'Internal Server Error',
         error: {
             message: err.message,
@@ -133,7 +146,7 @@ app.use((err, req, res, next) => {
 // --- Start Server ---
 app.listen(PORT, () => {
     console.log(`\n============================================================`);
-    console.log(`   VulnNode-CTF v2.0 - Intentionally Vulnerable E-Commerce`);
+    console.log(`   VulnNode-CTF v3.0 - Intentionally Vulnerable E-Commerce`);
     console.log(`============================================================`);
     console.log(`[!] WARNING: This application contains CRITICAL vulnerabilities`);
     console.log(`[!] - SQL Injection`);
@@ -155,15 +168,21 @@ app.listen(PORT, () => {
     console.log(``);
     console.log(`[*] Default Credentials:`);
     console.log(`    Admin: admin / admin123`);
-    console.log(`    User:  alice / alice123`);
+    console.log(`    User:  user / user123`);
+    console.log(`    Alice: alice / alice123`);
+    console.log(`    Bob:   bob / bob123`);
     console.log(``);
     console.log(`[*] Quick Links:`);
-    console.log(`    Products: http://localhost:${PORT}/`);
-    console.log(`    Login: http://localhost:${PORT}/auth/login`);
-    console.log(`    Cart: http://localhost:${PORT}/cart`);
-    console.log(`    Support: http://localhost:${PORT}/support`);
-    console.log(`    Admin: http://localhost:${PORT}/admin`);
-    console.log(`    Scoreboard: http://localhost:${PORT}/scoreboard`);
+    console.log(`    Home:       http://localhost:${PORT}/`);
+    console.log(`    Scoreboard: http://localhost:${PORT}/scoreboard 🏆`);
+    console.log(`    Login:      http://localhost:${PORT}/auth/login`);
+    console.log(`    Cart:       http://localhost:${PORT}/cart`);
+    console.log(`    Support:    http://localhost:${PORT}/support`);
+    console.log(`    Admin:      http://localhost:${PORT}/admin`);
+    console.log(``);
+    console.log(`[🎯] CTF Challenges: 10 (2,150 points total)`);
+    console.log(`[💾] Database: 15 tables, 64+ sample records`);
+    console.log(`[🐛] Intentional Bugs: 10+ major vulnerabilities`);
     console.log(``);
     console.log(`[*] Do NOT deploy in production!`);
     console.log(`[*] For educational purposes only.`);
