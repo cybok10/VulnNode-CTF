@@ -16,9 +16,9 @@ router.get('/', optionalAuth, (req, res) => {
         let sql = 'SELECT * FROM products WHERE 1=1';
         const params = [];
 
-        // Category filter
+        // Category filter (category is text in our schema)
         if (category) {
-            sql += ' AND category_id = ?';
+            sql += ' AND category = ?';
             params.push(category);
         }
 
@@ -43,7 +43,7 @@ router.get('/', optionalAuth, (req, res) => {
             // VULNERABILITY: SQL Injection via ORDER BY
             sql += ` ORDER BY ${sort}`;
         } else {
-            sql += ' ORDER BY id DESC';
+            sql += ' ORDER BY is_featured DESC, id DESC';
         }
 
         const products = db.prepare(sql).all(...params);
@@ -92,7 +92,7 @@ router.get('/:id', optionalAuth, (req, res) => {
             product: product,
             reviews: reviews,
             reviewCount: reviews.length,
-            averageRating: reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length || 0
+            averageRating: reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0
         });
     } catch (error) {
         console.error('Get product error:', error);
@@ -107,7 +107,7 @@ router.get('/:id', optionalAuth, (req, res) => {
 router.post('/:id/review', isAuthenticated, (req, res) => {
     try {
         const productId = req.params.id;
-        const { rating, comment } = req.body;
+        const { rating, title, comment } = req.body;
 
         if (!rating || rating < 1 || rating > 5) {
             return res.status(400).json({
@@ -128,14 +128,21 @@ router.post('/:id/review', isAuthenticated, (req, res) => {
         // VULNERABILITY: Stored XSS - No comment sanitization
         // User can inject JavaScript in comments
         const result = db.prepare(`
-            INSERT INTO reviews (product_id, user_id, rating, comment)
-            VALUES (?, ?, ?, ?)
-        `).run(productId, req.user.id, rating, comment);
+            INSERT INTO reviews (product_id, user_id, rating, title, comment)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(productId, req.user.id, rating, title || '', comment || '');
+
+        // Check if XSS payload detected (for CTF flag)
+        let flag = null;
+        if (comment && (comment.includes('<script>') || comment.includes('onerror='))) {
+            flag = 'FLAG{xss_c00k13_st34l3r}';
+        }
 
         res.json({
             success: true,
             message: 'Review added successfully',
-            reviewId: result.lastInsertRowid
+            reviewId: result.lastInsertRowid,
+            flag: flag
         });
     } catch (error) {
         console.error('Add review error:', error);
@@ -150,13 +157,13 @@ router.post('/:id/review', isAuthenticated, (req, res) => {
 router.put('/:id', isAuthenticated, (req, res) => {
     try {
         const productId = req.params.id;
-        const { name, description, price, stock, category_id } = req.body;
+        const { name, description, price, stock, category } = req.body;
 
         // VULNERABILITY: Weak admin check
-        if (req.user.role !== 'vendor' && req.user.username !== 'admin') {
+        if (!req.user.isAdmin && req.user.username !== 'admin') {
             return res.status(403).json({
                 success: false,
-                message: 'Vendor or admin access required'
+                message: 'Admin access required'
             });
         }
 
@@ -190,9 +197,9 @@ router.put('/:id', isAuthenticated, (req, res) => {
             updates.push('stock = ?');
             params.push(stock);
         }
-        if (category_id) {
-            updates.push('category_id = ?');
-            params.push(category_id);
+        if (category) {
+            updates.push('category = ?');
+            params.push(category);
         }
 
         if (updates.length === 0) {
@@ -225,7 +232,7 @@ router.delete('/:id', isAuthenticated, (req, res) => {
         const productId = req.params.id;
 
         // VULNERABILITY: Weak admin check via header
-        if (req.headers['x-admin-key'] !== 'admin123' && req.user.username !== 'admin') {
+        if (req.headers['x-admin-key'] !== 'admin123' && !req.user.isAdmin) {
             return res.status(403).json({
                 success: false,
                 message: 'Admin access required'
@@ -309,11 +316,17 @@ router.delete('/:id/wishlist', isAuthenticated, (req, res) => {
 // --- GET CATEGORIES ---
 router.get('/categories/all', (req, res) => {
     try {
-        const categories = db.prepare('SELECT * FROM categories ORDER BY name').all();
+        // Get unique categories from products
+        const categories = db.prepare(`
+            SELECT DISTINCT category 
+            FROM products 
+            WHERE category IS NOT NULL 
+            ORDER BY category
+        `).all();
 
         res.json({
             success: true,
-            categories: categories
+            categories: categories.map(c => c.category)
         });
     } catch (error) {
         console.error('Get categories error:', error);
@@ -331,28 +344,23 @@ router.get('/search/advanced', optionalAuth, (req, res) => {
 
         // VULNERABILITY: Complex SQL Injection
         // Multiple injection points in WHERE and ORDER BY clauses
-        let sql = `
-            SELECT p.*, c.name as category_name
-            FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            WHERE 1=1
-        `;
+        let sql = 'SELECT * FROM products WHERE 1=1';
 
         if (q) {
             // Direct concatenation - SQL Injection
-            sql += ` AND (p.name LIKE '%${q}%' OR p.description LIKE '%${q}%')`;
+            sql += ` AND (name LIKE '%${q}%' OR description LIKE '%${q}%')`;
         }
 
         if (category) {
-            sql += ` AND c.name = '${category}'`; // SQL Injection
+            sql += ` AND category = '${category}'`; // SQL Injection
         }
 
         if (min_price) {
-            sql += ` AND p.price >= ${min_price}`; // SQL Injection
+            sql += ` AND price >= ${min_price}`; // SQL Injection
         }
 
         if (max_price) {
-            sql += ` AND p.price <= ${max_price}`; // SQL Injection
+            sql += ` AND price <= ${max_price}`; // SQL Injection
         }
 
         // ORDER BY injection
@@ -382,7 +390,7 @@ router.get('/search/advanced', optionalAuth, (req, res) => {
             error: error.message,
             query: req.query,
             sqlError: error.code,
-            attemptedSQL: error.sql
+            attemptedSQL: sql
         });
     }
 });
